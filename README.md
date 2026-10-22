@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Pokémon TCG Pack Simulator</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts & FontAwesome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Press+Start+2P&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+            pixel: ['"Press Start 2P"', 'cursive'],
+          },
+          colors: {
+            vstar: {
+              gold: '#ffd700',
+              rainbow: '#ff77e9',
+              bg: '#1a0b2e'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * {
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      background: radial-gradient(circle at center, #1b1130 0%, #0a0512 100%);
+      overflow-x: hidden;
+      color: #fff;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    /* 3D Perspective Context */
+    .perspective-1000 {
+      perspective: 1200px;
+    }
+
+    .preserve-3d {
+      transform-style: preserve-3d;
+    }
+
+    .backface-hidden {
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+
+    .rotate-y-180 {
+      transform: rotateY(180deg);
+    }
+
+    /* Dynamic Card Holographic Foil Layer */
+    .holo-overlay {
+      background: linear-gradient(
+        115deg,
+        transparent 20%,
+        rgba(255, 255, 255, 0.45) 30%,
+        rgba(255, 0, 128, 0.35) 40%,
+        rgba(0, 255, 255, 0.35) 50%,
+        rgba(255, 230, 0, 0.45) 60%,
+        transparent 80%
+      );
+      background-size: 200% 200%;
+      mix-blend-mode: color-dodge;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    .card-container:hover .holo-overlay,
+    .card-container.active-holo .holo-overlay {
+      opacity: 0.85;
+    }
+
+    /* Serrated Crimp Edges for Booster Pack */
+    .crimp-edge {
+      background: repeating-linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.2) 0px,
+        rgba(255, 255, 255, 0.2) 2px,
+        rgba(0, 0, 0, 0.4) 2px,
+        rgba(0, 0, 0, 0.4) 4px
+      );
+    }
+
+    /* Foil Shine Specular */
+    .specular-glare {
+      background: radial-gradient(
+        circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+        rgba(255, 255, 255, 0.65) 0%,
+        rgba(255, 255, 255, 0) 60%
+      );
+      mix-blend-mode: overlay;
+      pointer-events: none;
+    }
+
+    /* Booster Pack Foil Tear Visual Effects */
+    .pack-foil {
+      background: linear-gradient(135deg, #1e293b 0%, #334155 25%, #0f172a 50%, #3b82f6 75%, #1d4ed8 100%);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(59, 130, 246, 0.3);
+    }
+
+    .foil-texture {
+      background-image: repeating-linear-gradient(
+        45deg,
+        rgba(255,255,255,0.03) 0px,
+        rgba(255,255,255,0.03) 2px,
+        transparent 2px,
+        transparent 4px
+      );
+    }
+
+    /* Animations */
+    @keyframes pulseGlow {
+      0%, 100% { filter: drop-shadow(0 0 15px rgba(236, 72, 153, 0.6)); }
+      50% { filter: drop-shadow(0 0 30px rgba(236, 72, 153, 0.9)); }
+    }
+
+    .animate-vstar-glow {
+      animation: pulseGlow 2.5s infinite ease-in-out;
+    }
+
+    @keyframes floatCard {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-8px) rotate(1deg); }
+    }
+
+    .animate-float {
+      animation: floatCard 4s infinite ease-in-out;
+    }
+
+    /* Shuffling deck transition */
+    .shuffle-fan-left {
+      transform: translate3d(-140px, 10px, 20px) rotate(-18deg) scale(0.95) !important;
+    }
+    .shuffle-fan-right {
+      transform: translate3d(140px, 10px, 20px) rotate(18deg) scale(0.95) !important;
+    }
+    
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #3b82f6;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between items-center relative select-none overflow-x-hidden">
+
+  <!-- Background Animation Canvas -->
+  <canvas id="particleCanvas" class="fixed inset-0 pointer-events-none z-0 opacity-60"></canvas>
+
+  <!-- Top Navigation & Controls Header -->
+  <header class="w-full max-w-5xl mx-auto p-4 flex justify-between items-center z-20">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-pink-500 to-purple-600 flex items-center justify-center shadow-lg shadow-pink-500/30">
+        <i class="fa-solid fa-cards-blank text-white text-xl"></i>
+      </div>
+      <div>
+        <h1 class="font-display font-extrabold text-xl tracking-wide bg-clip-text text-transparent bg-gradient-to-r from-pink-400 via-purple-300 to-indigo-300">
+          TCG PACK POCKET
+        </h1>
+        <p class="text-xs text-slate-400 font-medium">Virtual Pack Opener & Card Simulator</p>
+      </div>
+    </div>
+
+    <!-- Top Action Controls -->
+    <div class="flex items-center space-x-2">
+      <button id="uploadArtBtn" class="px-3.5 py-2 rounded-xl bg-purple-600/80 hover:bg-purple-500 border border-purple-400/50 text-white text-xs font-semibold flex items-center gap-2 transition active:scale-95 shadow-lg shadow-purple-600/30">
+        <i class="fa-solid fa-image"></i>
+        <span class="hidden sm:inline">Upload Art</span>
+      </button>
+
+      <button id="audioToggleBtn" class="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-2 transition active:scale-95 shadow-md">
+        <i id="audioIcon" class="fa-solid fa-volume-high text-pink-400"></i>
+        <span id="audioStatusText" class="hidden sm:inline">Audio On</span>
+      </button>
+
+      <button id="resetAppBtn" class="px-3.5 py-2 rounded-xl bg-pink-600/80 hover:bg-pink-500 border border-pink-400/50 text-white text-xs font-semibold flex items-center gap-2 transition active:scale-95 shadow-lg shadow-pink-600/30">
+        <i class="fa-solid fa-rotate-right"></i>
+        <span class="hidden sm:inline">New Pack</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN SIMULATOR CONTAINER -->
+  <main class="w-full max-w-4xl mx-auto flex-1 flex flex-col items-center justify-center px-4 py-2 relative z-10">
+
+    <!-- STEP 1: SEALED BOOSTER PACK VIEW -->
+    <div id="packView" class="flex flex-col items-center justify-center w-full transition-all duration-500">
+      <div class="text-center mb-6">
+        <span class="px-3 py-1 rounded-full text-xs font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30 uppercase tracking-widest mb-2 inline-block">
+          23rd Monthsary Edition Expansion
+        </span>
+        <h2 class="text-3xl sm:text-4xl font-display font-black tracking-tight text-white drop-shadow-md">
+          SWIPE TO TEAR PACKET
+        </h2>
+        <p class="text-slate-400 text-sm mt-1">Drag across the tear line at the top to rip open!</p>
+      </div>
+
+      <!-- 3D Sealed Foil Pack Element -->
+      <div class="perspective-1000 my-4 relative">
+        <div id="boosterPack" class="w-72 sm:w-80 h-[430px] sm:h-[470px] relative rounded-3xl pack-foil foil-texture preserve-3d cursor-grab active:cursor-grabbing transition-all duration-300 shadow-2xl border border-slate-600/50 flex flex-col justify-between overflow-visible animate-float">
+          
+          <!-- Glossy Specular Glare Layer -->
+          <div id="packSpecular" class="specular-glare absolute inset-0 rounded-3xl z-30 pointer-events-none opacity-60"></div>
+
+          <!-- Foil Top Tear Section (Detachable) -->
+          <div id="packTop" class="w-full h-28 bg-gradient-to-b from-purple-900 via-indigo-900 to-purple-950 relative border-b-2 border-dashed border-pink-400/80 flex flex-col justify-between p-3 rounded-t-3xl z-20 origin-bottom-left transition-all duration-200 shadow-xl">
+            <!-- Top Serrated Crimp Seal -->
+            <div class="absolute top-0 left-0 right-0 h-3 crimp-edge rounded-t-3xl border-b border-black/40"></div>
+
+            <div class="w-full flex justify-between items-center text-[10px] text-amber-300 font-bold tracking-wider pt-2">
+              <span>5 CARDS INSIDE</span>
+              <span>POKÉMON TCG</span>
+            </div>
+            
+            <!-- Dynamic Drag Tear Bar -->
+            <div id="tearHandle" class="w-full bg-gradient-to-r from-pink-500 via-rose-400 to-amber-400 h-9 rounded-xl flex items-center justify-between px-3 shadow-lg shadow-pink-500/40 cursor-ew-resize border border-white/40 group relative overflow-hidden">
+              <div id="tearProgressBar" class="absolute left-0 top-0 bottom-0 bg-white/40 pointer-events-none transition-all duration-75" style="width: 0%;"></div>
+              <div class="flex items-center gap-2 text-white font-black text-xs z-10 pointer-events-none">
+                <i class="fa-solid fa-scissors group-hover:rotate-45 transition-transform"></i>
+                <span id="tearLabelText">SWIPE TO TEAR</span>
+              </div>
+              <div class="flex items-center text-white text-xs gap-1 font-bold z-10 pointer-events-none">
+                <i class="fa-solid fa-angles-right animate-pulse"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card Emerging Peek Preview -->
+          <div id="packCardsPeek" class="absolute top-16 left-6 right-6 h-40 z-10 transition-all duration-500 pointer-events-none opacity-0 translate-y-6 flex justify-center items-center">
+            <div class="w-56 h-36 bg-gradient-to-tr from-amber-300 via-pink-400 to-indigo-500 rounded-xl p-1 shadow-2xl transform -rotate-3 scale-95 border-2 border-amber-300">
+              <div class="w-full h-full bg-slate-900 rounded-lg flex items-center justify-center">
+                <span class="text-amber-300 font-pixel text-xs animate-pulse">REVEALING PACK...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pack Main Artwork Body -->
+          <div class="flex-1 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden bg-gradient-to-b from-purple-950/80 via-slate-900/90 to-black/90">
+            <!-- Background Artwork Glow -->
+            <div class="absolute -top-10 -left-10 w-40 h-40 bg-pink-500/30 rounded-full blur-3xl"></div>
+            <div class="absolute -bottom-10 -right-10 w-40 h-40 bg-indigo-500/30 rounded-full blur-3xl"></div>
+
+            <!-- Custom Pack Badge Art -->
+            <div class="relative z-10 transform hover:scale-105 transition duration-300 w-full flex flex-col items-center">
+              <div class="w-44 h-52 sm:w-48 sm:h-56 rounded-2xl bg-gradient-to-tr from-amber-400 via-pink-500 to-indigo-500 p-1 shadow-2xl shadow-pink-500/40 mb-2 mx-auto flex items-center justify-center relative group">
+                <div class="w-full h-full bg-slate-950 rounded-xl overflow-hidden relative flex items-center justify-center">
+                  <img id="packPreviewImg" src="" class="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-110" alt="Special VSTAR Pack Cover">
+                  <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none"></div>
+                </div>
+              </div>
+              
+              <h3 class="font-display font-black text-2xl tracking-tight text-white drop-shadow">
+                RYU & DEV <span class="text-amber-300 font-pixel text-lg">VSTAR</span>
+              </h3>
+              <p class="text-xs text-pink-300 font-semibold mt-1">23rd MONTHSARY EDITION EXPANSION</p>
+            </div>
+
+            <!-- Foil Details -->
+            <div class="mt-4 pt-3 border-t border-slate-700/60 w-full text-[10px] text-slate-400 flex justify-around uppercase font-mono">
+              <span>Holo Guaranteed</span>
+              <span>•</span>
+              <span>Secret Ultra Rare</span>
+            </div>
+          </div>
+
+          <!-- Pack Bottom Seal with Crimp -->
+          <div class="h-9 bg-slate-950 border-t border-slate-800 flex items-center justify-center text-[10px] text-slate-500 font-mono tracking-widest relative rounded-b-3xl">
+            <div class="absolute bottom-0 left-0 right-0 h-2 crimp-edge rounded-b-3xl"></div>
+            /// NINTENDO / POKÉMON / GAME FREAK ///
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Trigger Button for Easy Touch Tap -->
+      <button id="quickRipBtn" class="mt-4 px-6 py-2.5 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold text-sm shadow-lg shadow-pink-500/25 hover:brightness-110 active:scale-95 transition flex items-center gap-2">
+        <i class="fa-solid fa-bolt"></i> Instant Rip Packet
+      </button>
+    </div>
+
+    <!-- STEP 2: CARDS REVEAL & SHUFFLING STACK VIEW -->
+    <div id="deckView" class="hidden w-full flex-col items-center justify-center transition-all duration-500">
+      
+      <!-- Top Status & Controls -->
+      <div class="w-full max-w-md flex justify-between items-center mb-4 px-4">
+        <div class="flex items-center gap-2">
+          <span id="cardProgressText" class="text-sm font-bold text-pink-300 font-mono bg-pink-950/60 px-3 py-1 rounded-full border border-pink-500/30">
+            Card 1 of 5
+          </span>
+          <span id="shuffleBadge" class="hidden text-xs font-bold text-amber-300 bg-amber-950/60 px-2.5 py-1 rounded-full border border-amber-500/30 flex items-center gap-1">
+            <i class="fa-solid fa-shuffle text-amber-400"></i> Deck Shuffled!
+          </span>
+        </div>
+
+        <div class="flex gap-2">
+          <!-- Action Button: Shuffle Cards -->
+          <button id="shuffleDeckBtn" class="px-3.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow-md">
+            <i class="fa-solid fa-shuffle text-amber-400"></i> Shuffle Pack
+          </button>
+          
+          <!-- Action Button: Reveal All -->
+          <button id="revealAllBtn" class="px-3.5 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-200 text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow-md">
+            <i class="fa-solid fa-eye text-indigo-400"></i> Reveal All
+          </button>
+        </div>
+      </div>
+
+      <!-- Interactive 3D Card Stack Area -->
+      <div class="perspective-1000 relative w-full h-[460px] sm:h-[500px] flex items-center justify-center my-2">
+        <!-- Stack Container holding all 5 Cards -->
+        <div id="cardStackContainer" class="relative w-72 sm:w-80 h-[430px] sm:h-[470px] preserve-3d">
+          <!-- Cards injected via JS -->
+        </div>
+      </div>
+
+      <!-- Helper Instructions -->
+      <div class="text-center mt-3 text-xs text-slate-400 flex items-center justify-center gap-4">
+        <span class="flex items-center gap-1"><i class="fa-solid fa-hand-pointer text-pink-400"></i> Tap card to flip</span>
+        <span>•</span>
+        <span class="flex items-center gap-1"><i class="fa-solid fa-arrows-left-right text-indigo-400"></i> Drag card away to reveal next</span>
+      </div>
+
+      <!-- Action Footer: Next / Finish Pack -->
+      <div class="mt-5 flex gap-3">
+        <button id="prevCardBtn" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed">
+          <i class="fa-solid fa-arrow-left mr-1"></i> Prev
+        </button>
+        <button id="nextCardBtn" class="px-6 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:brightness-110 text-white font-bold text-xs shadow-lg shadow-pink-500/30 transition active:scale-95">
+          Next Card <i class="fa-solid fa-arrow-right ml-1"></i>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- STEP 3: PACK SUMMARY GALLERY VIEW -->
+    <div id="summaryView" class="hidden w-full flex-col items-center justify-center transition-all duration-500 py-4">
+      <div class="text-center mb-6">
+        <span class="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-widest inline-block mb-2">
+          Pack Opened
+        </span>
+        <h2 class="text-3xl font-display font-black text-white">YOUR PACK PULLS</h2>
+        <p class="text-slate-400 text-xs mt-1">Tap any card to inspect in full 3D holographic view!</p>
+      </div>
+
+      <!-- Grid of all 5 Pulled Cards -->
+      <div id="summaryGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 w-full max-w-4xl px-2">
+        <!-- JS rendered cards summary -->
+      </div>
+
+      <div class="mt-8 flex flex-wrap justify-center gap-4">
+        <button id="openAnotherPackBtn" class="px-8 py-3 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 text-white font-black text-sm shadow-xl shadow-pink-500/30 hover:brightness-110 active:scale-95 transition flex items-center gap-2">
+          <i class="fa-solid fa-box-open"></i> Open Another Pack
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL: Fullscreen Card Inspector Modal -->
+  <div id="cardModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="relative w-full max-w-sm flex flex-col items-center">
+      <button id="closeModalBtn" class="absolute -top-12 right-0 w-10 h-10 rounded-full bg-slate-800 text-white hover:bg-slate-700 flex items-center justify-center text-lg font-bold border border-slate-600">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div id="modalCardHolder" class="w-72 sm:w-80 h-[430px] sm:h-[470px] perspective-1000">
+        <!-- Dynamic clone inserted here -->
+      </div>
+      <div id="modalCardMeta" class="mt-4 text-center">
+        <h4 id="modalCardTitle" class="text-xl font-bold text-white font-display"></h4>
+        <p id="modalCardSubtitle" class="text-xs text-pink-400 font-semibold"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Custom Card Art Upload Manager -->
+  <div id="artUploadModal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="relative w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-2xl p-5 text-white max-h-[90vh] overflow-y-auto shadow-2xl">
+      <button id="closeArtModalBtn" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 flex items-center justify-center text-sm font-bold border border-slate-600">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-pink-500/20 border border-pink-500/40 flex items-center justify-center text-pink-400">
+          <i class="fa-solid fa-cloud-arrow-up text-xl"></i>
+        </div>
+        <div>
+          <h3 class="text-xl font-bold font-display">Upload Custom Card Art</h3>
+          <p class="text-xs text-slate-400">Select images from your device to display on each card in your pack!</p>
+        </div>
+      </div>
+
+      <!-- Quick Bulk Upload Area -->
+      <div class="mb-5 p-4 rounded-xl bg-gradient-to-r from-purple-950/60 via-slate-800/60 to-pink-950/60 border border-purple-500/30 text-center">
+        <p class="text-xs text-slate-300 font-medium mb-2">Select all 5 image files at once to auto-assign them:</p>
+        <label class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold cursor-pointer transition shadow-md shadow-pink-600/30 active:scale-95">
+          <i class="fa-solid fa-folder-open"></i> Choose Image Files
+          <input type="file" id="bulkFileInput" multiple accept="image/*" class="hidden">
+        </label>
+      </div>
+
+      <!-- Individual Card Upload Slots Grid -->
+      <div id="uploadSlotsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <!-- JS rendered upload slot cards -->
+      </div>
+
+      <div class="mt-5 flex justify-end">
+        <button id="doneArtModalBtn" class="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold text-xs shadow-lg shadow-pink-500/20 hover:brightness-110 active:scale-95 transition">
+          Done &amp; Save
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       AUDIO SYNTHESIZER ENGINE
+       ========================================================================== */
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.ctx = new AudioContext();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playTear() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const bufferSize = this.ctx.sampleRate * 0.35;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(1200, this.ctx.currentTime);
+        filter.Q.setValueAtTime(3, this.ctx.currentTime);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.6, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.35);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        noise.start();
+      }
+
+      playWhoosh() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(450, this.ctx.currentTime + 0.12);
+
+        gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.12);
+      }
+
+      playFlip() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(659.25, this.ctx.currentTime + 0.15);
+
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.15);
+      }
+
+      playSparkle() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+        notes.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+
+          const startTime = this.ctx.currentTime + idx * 0.06;
+          gain.gain.setValueAtTime(0, startTime);
+          gain.gain.linearRampToValueAtTime(0.2, startTime + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start(startTime);
+          osc.stop(startTime + 0.4);
+        });
+      }
+
+      playShuffle() {
+        if (this.muted) return;
+        this.init();
+        for (let i = 0; i < 6; i++) {
+          setTimeout(() => this.playWhoosh(), i * 60);
+        }
+      }
+    }
+
+    const soundFx = new SoundEngine();
+
+    // SVG string encoder helper with explicit UTF-8 charset specification
+    const encodeSVG = (svg) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg).replace(/'/g, '%27');
+
+    /* ==========================================================================
+       FALLBACK & PERMANENT HIGH-RESOLUTION VECTOR ARTWORKS
+       ========================================================================== */
+    const PACK_ART_SVG = encodeSVG(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" width="100%" height="100%">
+      <defs>
+        <linearGradient id="pBg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#2d0b5a"/>
+          <stop offset="50%" stop-color="#5b1380"/>
+          <stop offset="100%" stop-color="#12052b"/>
+        </linearGradient>
+        <linearGradient id="starGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#ffd700"/>
+          <stop offset="50%" stop-color="#ff77e9"/>
+          <stop offset="100%" stop-color="#38bdf8"/>
+        </linearGradient>
+      </defs>
+      <rect width="300" height="200" rx="12" fill="url(#pBg)"/>
+      <circle cx="150" cy="100" r="70" fill="#ff77e9" opacity="0.3"/>
+      <path d="M150 30 L163 75 L210 80 L172 110 L185 155 L150 130 L115 155 L128 110 L90 80 L137 75 Z" fill="url(#starGlow)"/>
+      <text x="150" y="102" font-family="sans-serif" font-weight="900" font-size="20" fill="#ffffff" text-anchor="middle">VSTAR</text>
+      <text x="150" y="122" font-family="sans-serif" font-weight="700" font-size="11" fill="#ffd700" text-anchor="middle">RYU &amp; DEV</text>
+    </svg>`);
+
+    const DEVON_VSTAR_SVG = encodeSVG(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 460">
+      <defs>
+        <linearGradient id="goldFrame" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#fef08a"/>
+          <stop offset="50%" stop-color="#d97706"/>
+          <stop offset="100%" stop-color="#78350f"/>
+        </linearGradient>
+        <linearGradient id="darkBg" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#111827"/>
+          <stop offset="100%" stop-color="#030712"/>
+        </linearGradient>
+      </defs>
+      <rect width="320" height="460" rx="16" fill="url(#darkBg)"/>
+      <rect x="6" y="6" width="308" height="448" rx="12" fill="none" stroke="url(#goldFrame)" stroke-width="5"/>
+      
+      <!-- Top Title Header -->
+      <path d="M 20 12 L 210 12 L 230 38 L 300 38 L 300 50 L 20 50 Z" fill="url(#goldFrame)"/>
+      <text x="70" y="36" font-family="sans-serif" font-weight="900" font-size="22" fill="#000000">Devon</text>
+      <text x="145" y="36" font-family="sans-serif" font-weight="900" font-size="16" fill="#78350f">VSTAR</text>
+      <text x="238" y="35" font-family="sans-serif" font-weight="900" font-size="17" fill="#ffffff">HP 380</text>
+      <circle cx="288" cy="30" r="11" fill="#1e293b" stroke="#ffd700" stroke-width="1.5"/>
+      <!-- Dark Type Icon -->
+      <path d="M 288 23 C 283 23 280 28 284 33 C 287 37 293 37 293 31 Z" fill="#38bdf8"/>
+
+      <!-- Evolves from Devon V Stage Box -->
+      <circle cx="38" cy="35" r="20" fill="#f59e0b" stroke="#ffffff" stroke-width="2"/>
+      <circle cx="38" cy="35" r="15" fill="#1e1b4b"/>
+      <ellipse cx="38" cy="33" rx="6" ry="8" fill="#fbbf24"/>
+
+      <!-- Artwork Box (Devon with Glasses & Hood) -->
+      <g transform="translate(16, 56)">
+        <rect width="288" height="185" rx="8" fill="#1a102f" stroke="#d97706" stroke-width="2"/>
+        <rect x="10" y="10" width="268" height="165" fill="#0f172a" rx="6"/>
+        <circle cx="144" cy="90" r="58" fill="#1e293b"/>
+        
+        <!-- Hoodie & Character -->
+        <path d="M 100 160 C 100 100 188 100 188 160 Z" fill="#020617"/>
+        <path d="M 112 110 C 112 70 176 70 176 110 Z" fill="#1e1b4b"/>
+        
+        <!-- Face & Glasses -->
+        <rect x="126" y="95" width="36" height="24" rx="4" fill="#fde047" opacity="0.3"/>
+        <rect x="128" y="98" width="14" height="12" rx="2" fill="none" stroke="#f8fafc" stroke-width="2"/>
+        <rect x="146" y="98" width="14" height="12" rx="2" fill="none" stroke="#f8fafc" stroke-width="2"/>
+        
+        <!-- Peace Sign Gesture -->
+        <line x1="175" y1="130" x2="182" y2="105" stroke="#fca5a5" stroke-width="4" stroke-linecap="round"/>
+        <line x1="180" y1="130" x2="190" y2="110" stroke="#fca5a5" stroke-width="4" stroke-linecap="round"/>
+
+        <!-- Heart Bubble -->
+        <rect x="70" y="30" width="32" height="22" rx="6" fill="#ffffff"/>
+        <path d="M 86 38 C 84 34 78 36 82 41 L 86 46 L 90 41 C 94 36 88 34 86 38 Z" fill="#ef4444"/>
+      </g>
+
+      <!-- Move 1: Lunatic Claw -->
+      <rect x="16" y="248" width="288" height="75" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+      <circle cx="34" cy="265" r="9" fill="#1e293b" stroke="#ffd700" stroke-width="1"/>
+      <circle cx="56" cy="265" r="9" fill="#94a3b8"/>
+      <text x="75" y="270" font-family="sans-serif" font-weight="800" font-size="15" fill="#ffffff">Lunatic Claw</text>
+      <text x="245" y="270" font-family="sans-serif" font-weight="900" font-size="16" fill="#ffffff">100+</text>
+      <text x="25" y="292" font-family="sans-serif" font-size="9.5" fill="#cbd5e1">If your opponent's Active Pokémon has any damage counters</text>
+      <text x="25" y="306" font-family="sans-serif" font-size="9.5" fill="#cbd5e1">on it, this attack does 140 more damage.</text>
+
+      <!-- Move 2: Darkness Fang -->
+      <rect x="16" y="328" width="288" height="75" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+      <circle cx="34" cy="345" r="9" fill="#1e293b" stroke="#ffd700" stroke-width="1"/>
+      <circle cx="56" cy="345" r="9" fill="#94a3b8"/>
+      <circle cx="78" cy="345" r="9" fill="#94a3b8"/>
+      <text x="96" y="350" font-family="sans-serif" font-weight="800" font-size="15" fill="#ffffff">Darkness Fang</text>
+      <text x="255" y="350" font-family="sans-serif" font-weight="900" font-size="16" fill="#ffffff">100</text>
+      <text x="25" y="372" font-family="sans-serif" font-size="9.5" fill="#cbd5e1">A sharp bite delivered with full dark energy momentum.</text>
+
+      <!-- VSTAR Rule Box Footer -->
+      <rect x="110" y="408" width="194" height="38" rx="8" fill="url(#goldFrame)"/>
+      <text x="120" y="423" font-family="sans-serif" font-weight="900" font-size="9.5" fill="#000000">VSTAR rule</text>
+      <text x="120" y="436" font-family="sans-serif" font-size="8.5" fill="#1e293b">When VSTAR is Knocked Out, opponent takes 2 Prize cards.</text>
+      <text x="20" y="425" font-family="sans-serif" font-size="9" fill="#94a3b8">weakness 🥊x2  res 💧-30  retreat ⚽⚽</text>
+      <text x="20" y="438" font-family="sans-serif" font-weight="700" font-size="8.5" fill="#d97706">Illus. RYU • 23rd MONTHSARY</text>
+    </svg>`);
+
+    const DEVON_VMAX_SVG = encodeSVG(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 460">
+      <defs>
+        <linearGradient id="vmaxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#38bdf8"/>
+          <stop offset="30%" stop-color="#c084fc"/>
+          <stop offset="70%" stop-color="#f43f5e"/>
+          <stop offset="100%" stop-color="#fbbf24"/>
+        </linearGradient>
+      </defs>
+      <rect width="320" height="460" rx="16" fill="#0f172a"/>
+      <rect x="6" y="6" width="308" height="448" rx="12" fill="none" stroke="url(#vmaxGrad)" stroke-width="5"/>
+
+      <!-- Header -->
+      <rect x="16" y="16" width="288" height="42" rx="8" fill="rgba(15, 23, 42, 0.85)" stroke="#f43f5e" stroke-width="1.5"/>
+      <text x="65" y="43" font-family="sans-serif" font-weight="900" font-size="20" fill="#ffffff">Devon</text>
+      <text x="135" y="43" font-family="sans-serif" font-weight="900" font-size="18" font-style="italic" fill="#f43f5e">VMAX</text>
+      <text x="230" y="42" font-family="sans-serif" font-weight="900" font-size="17" fill="#38bdf8">HP 310</text>
+      <circle cx="285" cy="37" r="10" fill="#1e293b"/>
+
+      <!-- Evolves from Devon V -->
+      <circle cx="38" cy="37" r="18" fill="#1e1b4b" stroke="#38bdf8" stroke-width="2"/>
+      <polygon points="38,25 44,38 32,38" fill="#fbbf24"/>
+
+      <!-- Artwork Box (Blue Sky, Green Hills & Pink Cat) -->
+      <g transform="translate(16, 62)">
+        <rect width="288" height="200" rx="8" fill="#38bdf8"/>
+        <!-- Sky & Sun -->
+        <rect width="288" height="130" fill="#7dd3fc"/>
+        <circle cx="210" cy="35" r="28" fill="#fef08a"/>
+        <ellipse cx="60" cy="45" rx="35" ry="14" fill="#ffffff" opacity="0.85"/>
+        <ellipse cx="230" cy="65" rx="40" ry="16" fill="#ffffff" opacity="0.85"/>
+        <!-- Rolling Hills -->
+        <path d="M 0 130 Q 100 85 200 130 Q 250 110 288 130 L 288 200 L 0 200 Z" fill="#22c55e"/>
+        
+        <!-- Chibi Devon with Cat Ears -->
+        <rect x="120" y="110" width="48" height="60" rx="8" fill="#1e1b4b"/>
+        <!-- Hood Cat Ears -->
+        <polygon points="122,110 112,85 132,100" fill="#0f172a"/>
+        <polygon points="166,110 176,85 156,100" fill="#0f172a"/>
+        <!-- Face -->
+        <rect x="128" y="105" width="32" height="25" rx="4" fill="#fde047" opacity="0.4"/>
+        <circle cx="136" cy="115" r="3" fill="#0f172a"/>
+        <circle cx="152" cy="115" r="3" fill="#0f172a"/>
+        <!-- Pink Companion Cat -->
+        <ellipse cx="85" cy="160" rx="16" ry="12" fill="#f472b6"/>
+        <polygon points="75,152 70,140 80,148" fill="#f472b6"/>
+        <polygon points="85,152 90,140 82,148" fill="#f472b6"/>
+      </g>
+
+      <!-- Ability: Dark Signal -->
+      <rect x="16" y="270" width="288" height="70" rx="6" fill="#0f172a" stroke="#f43f5e" stroke-width="1.5"/>
+      <rect x="25" y="278" width="65" height="18" rx="4" fill="#dc2626"/>
+      <text x="32" y="291" font-family="sans-serif" font-weight="900" font-size="10" fill="#ffffff">Ability</text>
+      <text x="98" y="292" font-family="sans-serif" font-weight="800" font-size="14" fill="#ef4444">Dark Signal</text>
+      <text x="25" y="312" font-family="sans-serif" font-size="9" fill="#cbd5e1">When you play this Pokémon from your hand to evolve 1 of your</text>
+      <text x="25" y="325" font-family="sans-serif" font-size="9" fill="#cbd5e1">Pokémon, switch 1 of opponent's Benched with Active.</text>
+
+      <!-- Attack: Max Darkness -->
+      <rect x="16" y="348" width="288" height="50" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+      <circle cx="34" cy="373" r="8" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
+      <circle cx="54" cy="373" r="8" fill="#94a3b8"/>
+      <circle cx="74" cy="373" r="8" fill="#94a3b8"/>
+      <text x="92" y="378" font-family="sans-serif" font-weight="800" font-size="15" fill="#ffffff">Max Darkness</text>
+      <text x="250" y="378" font-family="sans-serif" font-weight="900" font-size="16" fill="#ffffff">160</text>
+
+      <!-- VMAX Rule Footer -->
+      <rect x="110" y="408" width="194" height="38" rx="8" fill="url(#vmaxGrad)"/>
+      <text x="120" y="423" font-family="sans-serif" font-weight="900" font-size="9.5" fill="#000000">VMAX rule</text>
+      <text x="120" y="436" font-family="sans-serif" font-size="8.5" fill="#000000">When VMAX is Knocked Out, opponent takes 3 Prize cards.</text>
+      <text x="20" y="425" font-family="sans-serif" font-size="9" fill="#94a3b8">weakness 🌿x2  retreat ⚽⚽</text>
+      <text x="20" y="438" font-family="sans-serif" font-weight="700" font-size="8.5" fill="#f43f5e">Illus. RYU</text>
+    </svg>`);
+
+    const RYU_DEV_VSTAR_SVG = encodeSVG(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 460">
+      <defs>
+        <linearGradient id="vstarPink" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#f472b6"/>
+          <stop offset="50%" stop-color="#c084fc"/>
+          <stop offset="100%" stop-color="#38bdf8"/>
+        </linearGradient>
+      </defs>
+      <rect width="320" height="460" rx="16" fill="#1e1b4b"/>
+      <rect x="6" y="6" width="308" height="448" rx="12" fill="none" stroke="url(#vstarPink)" stroke-width="5"/>
+
+      <!-- Header -->
+      <rect x="16" y="16" width="288" height="42" rx="8" fill="rgba(15, 23, 42, 0.9)" stroke="#ec4899" stroke-width="1.5"/>
+      <text x="58" y="43" font-family="sans-serif" font-weight="900" font-size="18" fill="#ffffff">Ryu &amp; Dev</text>
+      <text x="172" y="43" font-family="sans-serif" font-weight="900" font-size="16" fill="#f472b6">VSTAR</text>
+      <text x="238" y="42" font-family="sans-serif" font-weight="900" font-size="17" fill="#f472b6">HP 300</text>
+      <circle cx="290" cy="37" r="10" fill="#ec4899"/>
+
+      <!-- Heart Emblem -->
+      <circle cx="34" cy="37" r="16" fill="#f472b6"/>
+      <path d="M 34 30 C 28 24 20 28 26 36 L 34 43 L 42 36 C 48 28 40 24 34 30 Z" fill="#ffffff"/>
+
+      <!-- Artwork Box (City Night Lights & Ryu & Dev) -->
+      <g transform="translate(16, 62)">
+        <rect width="288" height="190" rx="8" fill="#090514"/>
+        <rect x="10" y="10" width="268" height="100" fill="#2d124d"/>
+        <text x="35" y="35" font-family="monospace" font-weight="900" font-size="15" fill="#f59e0b">LOST IN THE CITY</text>
+        <text x="22" y="68" font-family="monospace" font-weight="700" font-size="8.5" fill="#ef4444">SA TAUMBAYAN KAPANGYARIHAN</text>
+        
+        <!-- Floating Neon Heart -->
+        <path d="M 144 30 C 138 22 126 26 134 37 L 144 47 L 154 37 C 162 26 150 22 144 30 Z" fill="#f472b6"/>
+
+        <!-- Chibi Boy 1 (Ryu) -->
+        <rect x="90" y="110" width="40" height="65" fill="#1e293b"/>
+        <rect x="95" y="90" width="30" height="25" rx="4" fill="#fca5a5"/>
+        <rect x="92" y="80" width="36" height="18" fill="#0f172a"/>
+
+        <!-- Chibi Boy 2 (Dev) -->
+        <rect x="150" y="110" width="40" height="65" fill="#991b1b"/>
+        <rect x="155" y="90" width="30" height="25" rx="4" fill="#fca5a5"/>
+        <rect x="152" y="80" width="36" height="18" fill="#0f172a"/>
+      </g>
+
+      <!-- VSTAR Power Header -->
+      <rect x="16" y="258" width="288" height="22" fill="url(#vstarPink)" rx="4"/>
+      <text x="110" y="274" font-family="sans-serif" font-weight="900" font-size="13" fill="#ffffff">VSTAR Power</text>
+
+      <!-- Move: Aggressive Cuddling -->
+      <rect x="16" y="284" width="288" height="115" rx="6" fill="#0f172a" stroke="#ec4899" stroke-width="1.5"/>
+      <circle cx="34" cy="305" r="8" fill="#f472b6"/>
+      <circle cx="52" cy="305" r="8" fill="#f472b6"/>
+      <circle cx="70" cy="305" r="8" fill="#94a3b8"/>
+      <circle cx="88" cy="305" r="8" fill="#94a3b8"/>
+      <text x="104" y="310" font-family="sans-serif" font-weight="900" font-size="14" fill="#ffffff">Aggressive Cuddling</text>
+
+      <text x="25" y="332" font-family="sans-serif" font-size="9" fill="#cbd5e1">The Defending Pokémon is now Paralyzed due to excessive</text>
+      <text x="25" y="346" font-family="sans-serif" font-size="9" fill="#cbd5e1">affection, heavy limbs, and a complete lack of personal space.</text>
+      <text x="25" y="365" font-family="sans-serif" font-style="italic" font-size="8.5" fill="#f472b6">(You can't use more than 1 VSTAR Power in a game.)</text>
+
+      <!-- VSTAR Rule Footer -->
+      <rect x="110" y="408" width="194" height="38" rx="8" fill="url(#vstarPink)"/>
+      <text x="120" y="423" font-family="sans-serif" font-weight="900" font-size="9.5" fill="#000000">VSTAR rule</text>
+      <text x="120" y="436" font-family="sans-serif" font-size="8.5" fill="#000000">When VSTAR is Knocked Out, opponent takes 2 Prize cards.</text>
+      <text x="20" y="425" font-family="sans-serif" font-size="9" fill="#94a3b8">weakness 🌙x2  retreat ⚽⚽⚽</text>
+      <text x="20" y="438" font-family="sans-serif" font-weight="700" font-size="8.5" fill="#ec4899">Illus. RYU</text>
+    </svg>`);
+
+    const MEGA_DEVON_EX_SVG = encodeSVG(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 460">
+      <defs>
+        <linearGradient id="megaSilver" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#e2e8f0"/>
+          <stop offset="50%" stop-color="#94a3b8"/>
+          <stop offset="100%" stop-color="#334155"/>
+        </linearGradient>
+      </defs>
+      <rect width="320" height="460" rx="16" fill="#090d16"/>
+      <rect x="6" y="6" width="308" height="448" rx="12" fill="none" stroke="url(#megaSilver)" stroke-width="5"/>
+
+      <!-- Header -->
+      <rect x="16" y="16" width="288" height="42" rx="8" fill="rgba(15, 23, 42, 0.9)" stroke="#38bdf8" stroke-width="1.5"/>
+      <text x="60" y="43" font-family="sans-serif" font-weight="900" font-size="18" fill="#fde047">Mega Devon!</text>
+      <text x="180" y="43" font-family="sans-serif" font-weight="900" font-size="18" font-style="italic" fill="#38bdf8">ex</text>
+      <text x="230" y="42" font-family="sans-serif" font-weight="900" font-size="17" fill="#ffffff">HP 320</text>
+      <circle cx="285" cy="37" r="10" fill="#1e293b"/>
+
+      <!-- Artwork Box (Striped Shirt Devon with Halftone Stars) -->
+      <g transform="translate(16, 62)">
+        <rect width="288" height="200" rx="8" fill="#f8fafc"/>
+        <circle cx="144" cy="90" r="60" fill="#0f172a"/>
+        
+        <!-- Striped Shirt Body -->
+        <path d="M 100 160 C 100 110 188 110 188 160 Z" fill="#1e293b"/>
+        <line x1="110" y1="130" x2="178" y2="130" stroke="#ffffff" stroke-width="4"/>
+        <line x1="105" y1="145" x2="183" y2="145" stroke="#ffffff" stroke-width="4"/>
+
+        <!-- Colorful Stars Pattern -->
+        <polygon points="40,30 44,42 56,42 46,50 50,62 40,54 30,62 34,50 24,42 36,42" fill="#38bdf8"/>
+        <polygon points="240,40 244,52 256,52 246,60 250,72 240,64 230,72 234,60 224,52 236,52" fill="#f43f5e"/>
+        <polygon points="50,150 53,160 63,160 55,166 58,176 50,170 42,176 45,166 37,160 47,160" fill="#fde047"/>
+      </g>
+
+      <!-- Ability: Heavy Dozer -->
+      <rect x="16" y="270" width="288" height="65" rx="6" fill="#0f172a" stroke="#991b1b" stroke-width="1.5"/>
+      <rect x="25" y="276" width="65" height="18" rx="4" fill="#991b1b"/>
+      <text x="32" y="289" font-family="sans-serif" font-weight="900" font-size="10" fill="#ffffff">Ability</text>
+      <text x="98" y="290" font-family="sans-serif" font-weight="800" font-size="14" fill="#f87171">Heavy Dozer</text>
+      <text x="25" y="310" font-family="sans-serif" font-size="9" fill="#cbd5e1">While Asleep, Devon ignores Status damage and blocks the</text>
+      <text x="25" y="323" font-family="sans-serif" font-size="9" fill="#cbd5e1">way, adding +2 Energy to opponent's Retreat Cost.</text>
+
+      <!-- Attack: Aggressive chomp -->
+      <rect x="16" y="342" width="288" height="58" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+      <circle cx="30" cy="360" r="7" fill="#f472b6"/>
+      <circle cx="46" cy="360" r="7" fill="#f472b6"/>
+      <circle cx="62" cy="360" r="7" fill="#f472b6"/>
+      <circle cx="78" cy="360" r="7" fill="#94a3b8"/>
+      <circle cx="94" cy="360" r="7" fill="#94a3b8"/>
+      <text x="108" y="364" font-family="sans-serif" font-weight="800" font-size="13" fill="#ffffff">Aggressive chomp</text>
+      <text x="25" y="382" font-family="sans-serif" font-size="8.5" fill="#cbd5e1">Devon bites Defending Pokémon out of affection. Flip coin:</text>
+      <text x="25" y="394" font-family="sans-serif" font-size="8.5" fill="#cbd5e1">Heads +40 dmg. Tails Defending Pokémon is Confused.</text>
+
+      <!-- Mega Rule Footer -->
+      <rect x="110" y="408" width="194" height="38" rx="8" fill="url(#megaSilver)"/>
+      <text x="120" y="423" font-family="sans-serif" font-weight="900" font-size="9.5" fill="#000000">Mega Evolution ex rule</text>
+      <text x="120" y="436" font-family="sans-serif" font-size="8.5" fill="#1e293b">When Mega Evolution ex is Knocked Out, opponent takes 3 pts.</text>
+      <text x="20" y="425" font-family="sans-serif" font-size="9" fill="#94a3b8">weakness 🌙x2  retreat ⚽⚽⚽</text>
+      <text x="20" y="438" font-family="sans-serif" font-weight="700" font-size="8.5" fill="#38bdf8">Illus. Ryuzaki</text>
+    </svg>`);
+
+    const RYUZAKI_EX_SVG = encodeSVG(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 460">
+      <defs>
+        <linearGradient id="fireGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#f97316"/>
+          <stop offset="50%" stop-color="#ef4444"/>
+          <stop offset="100%" stop-color="#b91c1c"/>
+        </linearGradient>
+      </defs>
+      <rect width="320" height="460" rx="16" fill="#0f172a"/>
+      <rect x="6" y="6" width="308" height="448" rx="12" fill="none" stroke="url(#fireGrad)" stroke-width="5"/>
+
+      <!-- Header -->
+      <rect x="16" y="16" width="288" height="42" rx="8" fill="rgba(15, 23, 42, 0.9)" stroke="#f97316" stroke-width="1.5"/>
+      <text x="65" y="43" font-family="sans-serif" font-weight="900" font-size="20" fill="#ffffff">Ryuzaki</text>
+      <text x="148" y="43" font-family="sans-serif" font-weight="900" font-size="18" font-style="italic" fill="#fb923c">ex</text>
+      <text x="230" y="42" font-family="sans-serif" font-weight="900" font-size="17" fill="#f97316">HP 300</text>
+      <circle cx="285" cy="37" r="10" fill="#ea580c"/>
+
+      <!-- Fire Emblem -->
+      <circle cx="38" cy="37" r="18" fill="#7c2d12" stroke="#f97316" stroke-width="1.5"/>
+      <polygon points="38,25 44,35 32,35" fill="#fde047"/>
+
+      <!-- Artwork Box (Anime Ryuzaki with Goggles Pointing Up) -->
+      <g transform="translate(16, 62)">
+        <rect width="288" height="195" rx="8" fill="#451a03"/>
+        <circle cx="144" cy="100" r="65" fill="#f8fafc"/>
+        
+        <!-- Hair, Face & Forehead Goggles -->
+        <rect x="120" y="85" width="48" height="35" rx="6" fill="#fde047" opacity="0.3"/>
+        <path d="M 110 80 C 110 50 178 50 178 80 C 178 65 110 65 110 80 Z" fill="#0f172a"/>
+        <rect x="125" y="62" width="16" height="10" rx="3" fill="#f97316"/>
+        <rect x="145" y="62" width="16" height="10" rx="3" fill="#f97316"/>
+        <line x1="180" y1="120" x2="190" y2="90" stroke="#fca5a5" stroke-width="4" stroke-linecap="round"/>
+
+        <!-- Sparkles -->
+        <polygon points="60,40 63,48 71,48 65,53 67,61 60,56 53,61 55,53 49,48 57,48" fill="#ffffff"/>
+      </g>
+
+      <!-- Ability: Spellbound Kiss Blast -->
+      <rect x="16" y="265" width="288" height="70" rx="6" fill="#0f172a" stroke="#f97316" stroke-width="1.5"/>
+      <rect x="25" y="273" width="65" height="18" rx="4" fill="#c2410c"/>
+      <text x="32" y="286" font-family="sans-serif" font-weight="900" font-size="10" fill="#ffffff">Ability</text>
+      <text x="98" y="287" font-family="sans-serif" font-weight="800" font-size="13" fill="#fb923c">Spellbound Kiss Blast</text>
+      <text x="25" y="307" font-family="sans-serif" font-size="9" fill="#cbd5e1">Once during your turn, give Ryu a cheek kiss. If you do,</text>
+      <text x="25" y="320" font-family="sans-serif" font-size="9" fill="#cbd5e1">heal 50 damage from Ryu and remove all Special Conditions.</text>
+
+      <!-- Attack: Blaze kick -->
+      <rect x="16" y="342" width="288" height="58" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+      <circle cx="30" cy="360" r="7" fill="#ea580c"/>
+      <circle cx="46" cy="360" r="7" fill="#b91c1c"/>
+      <circle cx="62" cy="360" r="7" fill="#94a3b8"/>
+      <circle cx="78" cy="360" r="7" fill="#94a3b8"/>
+      <text x="92" y="364" font-family="sans-serif" font-weight="800" font-size="14" fill="#ffffff">Blaze kick</text>
+      <text x="250" y="364" font-family="sans-serif" font-weight="900" font-size="15" fill="#ffffff">180</text>
+      <text x="25" y="384" font-family="sans-serif" font-size="8.5" fill="#cbd5e1">Opponent Pokémon is now burned. Does 30 damage and Burned.</text>
+
+      <!-- ex Rule Footer -->
+      <rect x="110" y="408" width="194" height="38" rx="8" fill="url(#fireGrad)"/>
+      <text x="120" y="423" font-family="sans-serif" font-weight="900" font-size="9.5" fill="#ffffff">Pokémon ex rule</text>
+      <text x="120" y="436" font-family="sans-serif" font-size="8.5" fill="#ffffff">When Pokémon ex is Knocked Out, opponent takes 2 Prize cards.</text>
+      <text x="20" y="425" font-family="sans-serif" font-size="9" fill="#94a3b8">weakness 🌙x2  retreat ⚽⚽⚽</text>
+      <text x="20" y="438" font-family="sans-serif" font-weight="700" font-size="8.5" fill="#f97316">Illus. RYU</text>
+    </svg>`);
+
+    /* ==========================================================================
+       CARD DECK CONFIGURATION (PERMANENT EMBEDDED CARDS)
+       ========================================================================== */
+    let cardDeck = [
+      {
+        id: 'devon_vstar',
+        name: 'Devon VSTAR',
+        hp: '380',
+        type: 'Dark',
+        rarity: 'Secret Gold VSTAR',
+        rarityIcon: 'VSTAR ★★★',
+        isVStar: true,
+        img: '--devon-d-2_9.jpg',
+        fallback: DEVON_VSTAR_SVG
+      },
+      {
+        id: 'devon_vmax',
+        name: 'Devon VMAX',
+        hp: '310',
+        type: 'Dark',
+        rarity: 'Ultra Rare VMAX',
+        rarityIcon: 'VMAX ★★',
+        isVStar: false,
+        img: '--devon_9.jpg',
+        fallback: DEVON_VMAX_SVG
+      },
+      {
+        id: 'ryu_dev_vstar',
+        name: 'Ryu & Dev VSTAR',
+        hp: '300',
+        type: 'Fairy / Love',
+        rarity: '23rd Monthsary Edition',
+        rarityIcon: 'VSTAR ★★★',
+        isVStar: true,
+        img: '--ryu-dev_10.jpg',
+        fallback: RYU_DEV_VSTAR_SVG
+      },
+      {
+        id: 'mega_devon_ex',
+        name: 'Mega Devon! ex',
+        hp: '320',
+        type: 'Dark',
+        rarity: 'Mega Evolution EX',
+        rarityIcon: 'EX ★★',
+        isVStar: false,
+        img: 'mega-devon_9.jpg',
+        fallback: MEGA_DEVON_EX_SVG
+      },
+      {
+        id: 'ryuzaki_ex',
+        name: 'Ryuzaki ex',
+        hp: '300',
+        type: 'Fire',
+        rarity: 'Rainbow Gold EX',
+        rarityIcon: 'EX ★★',
+        isVStar: false,
+        img: 'ryuzaki_9.jpg',
+        fallback: RYUZAKI_EX_SVG
+      }
+    ];
+
+    /* ==========================================================================
+       GLOBAL STATE VARIABLES
+       ========================================================================== */
+    let activeCardIndex = 0;
+    let isFlippedArray = [false, false, false, false, false];
+    let isPackRipped = false;
+    let isTearingPack = false;
+    let tearStartX = 0;
+    let currentTearX = 0;
+    let isDraggingCard = false;
+
+    /* ==========================================================================
+       DOM ELEMENT REFERENCES
+       ========================================================================== */
+    const packView = document.getElementById('packView');
+    const deckView = document.getElementById('deckView');
+    const summaryView = document.getElementById('summaryView');
+    const boosterPack = document.getElementById('boosterPack');
+    const packTop = document.getElementById('packTop');
+    const tearHandle = document.getElementById('tearHandle');
+    const tearProgressBar = document.getElementById('tearProgressBar');
+    const packCardsPeek = document.getElementById('packCardsPeek');
+    const cardStackContainer = document.getElementById('cardStackContainer');
+    const cardProgressText = document.getElementById('cardProgressText');
+    const shuffleBadge = document.getElementById('shuffleBadge');
+    const prevCardBtn = document.getElementById('prevCardBtn');
+    const nextCardBtn = document.getElementById('nextCardBtn');
+    const cardModal = document.getElementById('cardModal');
+    const modalCardHolder = document.getElementById('modalCardHolder');
+    const modalCardTitle = document.getElementById('modalCardTitle');
+    const modalCardSubtitle = document.getElementById('modalCardSubtitle');
+
+    /* ==========================================================================
+       BACKGROUND PARTICLE CANVAS SYSTEM
+       ========================================================================== */
+    const canvas = document.getElementById('particleCanvas');
+    const ctx = canvas ? canvas.getContext('2d') : null;
+    let particles = [];
+
+    function resizeCanvas() {
+      if (!canvas) return;
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    class Particle {
+      constructor(x, y, isSparkle = false) {
+        this.x = x || Math.random() * (canvas ? canvas.width : 800);
+        this.y = y || Math.random() * (canvas ? canvas.height : 600);
+        this.size = isSparkle ? Math.random() * 4 + 2 : Math.random() * 2 + 1;
+        this.speedX = (Math.random() - 0.5) * (isSparkle ? 6 : 1);
+        this.speedY = (Math.random() - 0.5) * (isSparkle ? 6 : 1) - (isSparkle ? 1 : 0.5);
+        this.color = isSparkle 
+          ? ['#ffd700', '#ec4899', '#38bdf8', '#a855f7'][Math.floor(Math.random() * 4)]
+          : 'rgba(255, 255, 255, 0.3)';
+        this.life = 1;
+        this.decay = isSparkle ? Math.random() * 0.03 + 0.015 : 0;
+      }
+      update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        if (this.decay > 0) {
+          this.life -= this.decay;
+        } else if (canvas) {
+          if (this.y < 0) this.y = canvas.height;
+          if (this.x < 0) this.x = canvas.width;
+          if (this.x > canvas.width) this.x = 0;
+        }
+      }
+      draw() {
+        if (!ctx) return;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    for (let i = 0; i < 40; i++) {
+      particles.push(new Particle());
+    }
+
+    function spawnBurst(x, y, count = 40) {
+      for (let i = 0; i < count; i++) {
+        particles.push(new Particle(x, y, true));
+      }
+    }
+
+    function animateParticles() {
+      if (ctx && canvas) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let i = particles.length - 1; i >= 0; i--) {
+          particles[i].update();
+          particles[i].draw();
+          if (particles[i].life <= 0) {
+            particles.splice(i, 1);
+          }
+        }
+      }
+      requestAnimationFrame(animateParticles);
+    }
+    animateParticles();
+
+    /* ==========================================================================
+       PACK TEARING LOGIC
+       ========================================================================== */
+    function handleTearStart(clientX) {
+      if (isPackRipped) return;
+      isTearingPack = true;
+      tearStartX = clientX;
+    }
+
+    function handleTearMove(clientX) {
+      if (!isTearingPack || isPackRipped || !tearHandle) return;
+      const rect = tearHandle.getBoundingClientRect();
+      const deltaX = clientX - tearStartX;
+      const progress = Math.min(Math.max(deltaX / rect.width, 0), 1);
+      
+      if (tearProgressBar) {
+        tearProgressBar.style.width = `${progress * 100}%`;
+      }
+      
+      if (packTop) {
+        packTop.style.transform = `rotate(${progress * 12}deg) translate(${progress * 20}px, -${progress * 10}px)`;
+      }
+
+      if (progress >= 0.85) {
+        isTearingPack = false;
+        triggerPackRipAnimation();
+      }
+    }
+
+    function handleTearEnd() {
+      if (!isTearingPack || isPackRipped) return;
+      isTearingPack = false;
+      resetTearProgress();
+    }
+
+    function resetTearProgress() {
+      if (isPackRipped) return;
+      if (tearProgressBar) tearProgressBar.style.width = '0%';
+      if (packTop) packTop.style.transform = 'none';
+    }
+
+    if (tearHandle) {
+      tearHandle.addEventListener('mousedown', (e) => handleTearStart(e.clientX));
+      window.addEventListener('mousemove', (e) => handleTearMove(e.clientX));
+      window.addEventListener('mouseup', handleTearEnd);
+
+      tearHandle.addEventListener('touchstart', (e) => handleTearStart(e.touches[0].clientX), { passive: true });
+      window.addEventListener('touchmove', (e) => handleTearMove(e.touches[0].clientX), { passive: true });
+      window.addEventListener('touchend', handleTearEnd);
+    }
+
+    document.getElementById('quickRipBtn').addEventListener('click', triggerPackRipAnimation);
+
+    function triggerPackRipAnimation() {
+      if (isPackRipped) return;
+      isPackRipped = true;
+
+      soundFx.playTear();
+      soundFx.playSparkle();
+
+      if (tearProgressBar) tearProgressBar.style.width = '100%';
+      if (packTop) {
+        packTop.style.transform = 'translate3d(240px, -130px, 60px) rotate(60deg)';
+        packTop.style.opacity = '0';
+      }
+
+      if (packCardsPeek) {
+        packCardsPeek.style.opacity = '1';
+        packCardsPeek.style.transform = 'translateY(-70px)';
+      }
+
+      if (boosterPack) {
+        const rect = boosterPack.getBoundingClientRect();
+        spawnBurst(rect.left + rect.width / 2, rect.top + 50, 60);
+      }
+
+      setTimeout(() => {
+        packView.classList.add('hidden');
+        deckView.classList.remove('hidden');
+        deckView.classList.add('flex');
+        renderDeckStack();
+      }, 700);
+    }
+
+    /* ==========================================================================
+       3D DECK STACK & CARD INTERACTION SYSTEM
+       ========================================================================== */
+    function renderDeckStack() {
+      if (!cardStackContainer) return;
+      cardStackContainer.innerHTML = '';
+
+      cardDeck.forEach((card, index) => {
+        const cardElem = createCardElement(card, index, cardDeck.length);
+        cardStackContainer.appendChild(cardElem);
+        setupCardInteractions(cardElem, index);
+      });
+
+      updateDeckState();
+    }
+
+    function createCardElement(card, index, totalCards) {
+      const cardContainer = document.createElement('div');
+      cardContainer.className = `card-container absolute inset-0 w-full h-full preserve-3d cursor-pointer transition-transform duration-300 select-none`;
+      cardContainer.dataset.index = index;
+      cardContainer.dataset.cardId = card.id;
+
+      cardContainer.innerHTML = `
+        <div class="card-inner relative w-full h-full preserve-3d transition-transform duration-500 rounded-2xl shadow-2xl">
+          
+          <!-- CARD BACK -->
+          <div class="card-back absolute inset-0 w-full h-full rounded-2xl bg-gradient-to-br from-indigo-950 via-slate-900 to-blue-950 border-4 border-amber-300/80 p-3 backface-hidden flex flex-col justify-between items-center shadow-xl overflow-hidden">
+            <div class="w-full text-[10px] font-mono text-amber-300/60 flex justify-between tracking-widest">
+              <span>POKÉMON TCG</span>
+              <span>POCKET</span>
+            </div>
+            
+            <div class="relative w-36 h-36 rounded-full border-8 border-slate-900 bg-gradient-to-b from-red-600 via-red-500 to-slate-100 flex items-center justify-center shadow-inner">
+              <div class="w-full h-3 bg-slate-900 absolute"></div>
+              <div class="w-12 h-12 rounded-full bg-slate-900 border-4 border-slate-900 flex items-center justify-center relative z-10">
+                <div class="w-6 h-6 rounded-full bg-white border-2 border-slate-900"></div>
+              </div>
+            </div>
+
+            <div class="text-[10px] font-pixel text-pink-400/80 tracking-wider">TAP TO REVEAL</div>
+          </div>
+
+          <!-- CARD FRONT -->
+          <div class="card-front absolute inset-0 w-full h-full rounded-2xl bg-slate-950 border-2 border-amber-300/60 p-1 backface-hidden rotate-y-180 flex flex-col justify-between overflow-hidden shadow-2xl">
+            <!-- Holographic Overlay -->
+            <div class="holo-overlay absolute inset-0 rounded-xl z-20"></div>
+            <div class="specular-glare absolute inset-0 rounded-xl z-20"></div>
+
+            <img class="card-img w-full h-full object-contain rounded-xl relative z-10" alt="${card.name}">
+          </div>
+
+        </div>
+      `;
+
+      const img = cardContainer.querySelector('.card-img');
+      if (img) {
+        img.onerror = () => {
+          img.onerror = null;
+          img.src = card.fallback;
+        };
+        img.src = card.img || card.fallback;
+      }
+
+      return cardContainer;
+    }
+
+    function updateDeckState() {
+      if (!cardStackContainer) return;
+      const cards = Array.from(cardStackContainer.children);
+      
+      cards.forEach((cardElem, index) => {
+        const diff = index - activeCardIndex;
+        cardElem.style.transition = isDraggingCard ? 'none' : 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s ease';
+
+        if (diff < 0) {
+          // Swiped away / revealed already
+          cardElem.style.transform = `translate3d(-400px, 0px, -100px) rotate(-30deg)`;
+          cardElem.style.opacity = '0';
+          cardElem.style.pointerEvents = 'none';
+        } else if (diff === 0) {
+          // Top active card
+          cardElem.style.transform = `translate3d(0px, 0px, 0px) rotate(0deg) scale(1)`;
+          cardElem.style.opacity = '1';
+          cardElem.style.pointerEvents = 'auto';
+          cardElem.style.zIndex = '30';
+        } else {
+          // Stacked underneath
+          const translateY = diff * 8;
+          const scale = 1 - diff * 0.04;
+          cardElem.style.transform = `translate3d(0px, ${translateY}px, -${diff * 20}px) scale(${scale})`;
+          cardElem.style.opacity = (1 - diff * 0.15).toString();
+          cardElem.style.pointerEvents = 'none';
+          cardElem.style.zIndex = (30 - diff).toString();
+        }
+
+        const inner = cardElem.querySelector('.card-inner');
+        if (inner) {
+          inner.style.transform = isFlippedArray[index] ? 'rotateY(180deg)' : 'rotateY(0deg)';
+        }
+      });
+
+      if (cardProgressText) {
+        cardProgressText.textContent = `Card ${Math.min(activeCardIndex + 1, cardDeck.length)} of ${cardDeck.length}`;
+      }
+
+      if (prevCardBtn) prevCardBtn.disabled = activeCardIndex === 0;
+      
+      if (nextCardBtn) {
+        if (activeCardIndex >= cardDeck.length - 1 && isFlippedArray[activeCardIndex]) {
+          nextCardBtn.innerHTML = 'See All Pulls <i class="fa-solid fa-trophy ml-1"></i>';
+        } else {
+          nextCardBtn.innerHTML = 'Next Card <i class="fa-solid fa-arrow-right ml-1"></i>';
+        }
+      }
+    }
+
+    function setupCardInteractions(cardElem, index) {
+      let startX = 0, startY = 0, currentX = 0, currentY = 0;
+      let isDragging = false;
+
+      setupCardTilt(cardElem);
+
+      cardElem.addEventListener('click', (e) => {
+        if (Math.abs(currentX - startX) > 10 || Math.abs(currentY - startY) > 10) return;
+        if (index !== activeCardIndex) return;
+        
+        flipCard(cardElem, index);
+      });
+
+      const onStart = (clientX, clientY) => {
+        if (index !== activeCardIndex) return;
+        isDragging = true;
+        isDraggingCard = true;
+        startX = clientX;
+        startY = clientY;
+        currentX = clientX;
+        currentY = clientY;
+      };
+
+      const onMove = (clientX, clientY) => {
+        if (!isDragging || index !== activeCardIndex) return;
+        currentX = clientX;
+        currentY = clientY;
+        const deltaX = currentX - startX;
+        const deltaY = currentY - startY;
+        const rotate = deltaX * 0.08;
+
+        cardElem.style.transition = 'none';
+        cardElem.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0px) rotate(${rotate}deg)`;
+      };
+
+      const onEnd = () => {
+        if (!isDragging || index !== activeCardIndex) return;
+        isDragging = false;
+        isDraggingCard = false;
+
+        const deltaX = currentX - startX;
+        if (Math.abs(deltaX) > 120) {
+          soundFx.playWhoosh();
+          if (!isFlippedArray[index]) {
+            flipCard(cardElem, index);
+          }
+          revealNextCard();
+        } else {
+          updateDeckState();
+        }
+      };
+
+      cardElem.addEventListener('mousedown', (e) => onStart(e.clientX, e.clientY));
+      window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+      window.addEventListener('mouseup', onEnd);
+
+      cardElem.addEventListener('touchstart', (e) => onStart(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+      window.addEventListener('touchmove', (e) => onMove(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+      window.addEventListener('touchend', onEnd);
+    }
+
+    function setupCardTilt(cardElem) {
+      cardElem.addEventListener('mousemove', (e) => {
+        const rect = cardElem.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const mouseX = (x / rect.width) * 100;
+        const mouseY = (y / rect.height) * 100;
+        cardElem.style.setProperty('--mouse-x', `${mouseX}%`);
+        cardElem.style.setProperty('--mouse-y', `${mouseY}%`);
+
+        // Real-time 3D tilt calculation and surface reflection
+        const idx = parseInt(cardElem.dataset.index, 10);
+        if (idx === activeCardIndex) {
+          const rotateX = ((y - rect.height / 2) / (rect.height / 2)) * -14;
+          const rotateY = ((x - rect.width / 2) / (rect.width / 2)) * 14;
+          const inner = cardElem.querySelector('.card-inner');
+          if (inner) {
+            const yRot = isFlippedArray[idx] ? 180 : 0;
+            inner.style.transform = `rotateY(${yRot}deg) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+          }
+        }
+      });
+
+      cardElem.addEventListener('mouseleave', () => {
+        const idx = parseInt(cardElem.dataset.index, 10);
+        const inner = cardElem.querySelector('.card-inner');
+        if (inner) {
+          const yRot = isFlippedArray[idx] ? 180 : 0;
+          inner.style.transform = `rotateY(${yRot}deg)`;
+        }
+      });
+    }
+
+    function flipCard(cardElem, index) {
+      isFlippedArray[index] = !isFlippedArray[index];
+      const inner = cardElem.querySelector('.card-inner');
+      if (inner) {
+        inner.style.transform = isFlippedArray[index] ? 'rotateY(180deg)' : 'rotateY(0deg)';
+      }
+      soundFx.playFlip();
+
+      if (isFlippedArray[index]) {
+        const rect = cardElem.getBoundingClientRect();
+        spawnBurst(rect.left + rect.width / 2, rect.top + rect.height / 2, 25);
+      }
+      
+      updateDeckState();
+    }
+
+    function revealNextCard() {
+      if (activeCardIndex < cardDeck.length - 1) {
+        activeCardIndex++;
+        updateDeckState();
+      } else {
+        showPackSummary();
+      }
+    }
+
+    function revealPrevCard() {
+      if (activeCardIndex > 0) {
+        activeCardIndex--;
+        updateDeckState();
+      }
+    }
+
+    function shufflePack() {
+      soundFx.playShuffle();
+      
+      for (let i = cardDeck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [cardDeck[i], cardDeck[j]] = [cardDeck[j], cardDeck[i]];
+      }
+
+      isFlippedArray = [false, false, false, false, false];
+      activeCardIndex = 0;
+
+      if (shuffleBadge) {
+        shuffleBadge.classList.remove('hidden');
+        setTimeout(() => shuffleBadge.classList.add('hidden'), 2500);
+      }
+
+      if (cardStackContainer) {
+        const cards = Array.from(cardStackContainer.children);
+        cards.forEach((c, idx) => {
+          if (idx % 2 === 0) c.classList.add('shuffle-fan-left');
+          else c.classList.add('shuffle-fan-right');
+        });
+      }
+
+      setTimeout(() => {
+        renderDeckStack();
+      }, 400);
+    }
+
+    /* ==========================================================================
+       SUMMARY GALLERY & FULLSCREEN MODAL INSPECTOR
+       ========================================================================== */
+    function showPackSummary() {
+      deckView.classList.add('hidden');
+      summaryView.classList.remove('hidden');
+      summaryView.classList.add('flex');
+
+      soundFx.playSparkle();
+
+      const summaryGrid = document.getElementById('summaryGrid');
+      if (!summaryGrid) return;
+      summaryGrid.innerHTML = '';
+
+      cardDeck.forEach((card) => {
+        const item = document.createElement('div');
+        item.className = 'w-full h-64 rounded-xl bg-slate-900 border border-slate-700 p-1.5 flex flex-col justify-between cursor-pointer hover:scale-105 transition shadow-lg relative overflow-hidden group';
+        
+        item.innerHTML = `
+          <div class="w-full h-48 rounded-lg bg-slate-950 overflow-hidden relative">
+            <img class="summary-card-img w-full h-full object-contain" alt="${card.name}">
+            <div class="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-bold text-amber-300">
+              ${card.hp} HP
+            </div>
+          </div>
+          <div class="p-1">
+            <h5 class="text-xs font-bold text-white font-display truncate">${card.name}</h5>
+            <span class="text-[9px] text-pink-400 font-mono">${card.rarity}</span>
+          </div>
+        `;
+
+        const img = item.querySelector('.summary-card-img');
+        if (img) {
+          img.onerror = () => {
+            img.onerror = null;
+            img.src = card.fallback;
+          };
+          img.src = card.img || card.fallback;
+        }
+
+        item.addEventListener('click', () => openCardModal(card));
+        summaryGrid.appendChild(item);
+      });
+    }
+
+    function openCardModal(card) {
+      if (!cardModal || !modalCardHolder) return;
+
+      modalCardHolder.innerHTML = '';
+      const cardElem = createCardElement(card, 0, 1);
+      
+      const inner = cardElem.querySelector('.card-inner');
+      if (inner) {
+        inner.style.transform = 'rotateY(180deg)';
+      }
+      cardElem.style.transform = 'translate3d(0px, 0px, 0px) rotate(0deg) scale(1)';
+      cardElem.style.opacity = '1';
+      cardElem.style.pointerEvents = 'auto';
+
+      modalCardHolder.appendChild(cardElem);
+      setupCardTilt(cardElem);
+
+      cardElem.addEventListener('click', () => {
+        if (!inner) return;
+        const isFlipped = inner.style.transform.includes('180deg');
+        inner.style.transform = isFlipped ? 'rotateY(0deg)' : 'rotateY(180deg)';
+        soundFx.playFlip();
+      });
+
+      if (modalCardTitle) modalCardTitle.textContent = card.name;
+      if (modalCardSubtitle) modalCardSubtitle.textContent = `${card.rarity} • ${card.hp} HP`;
+
+      cardModal.classList.remove('hidden');
+      soundFx.playSparkle();
+    }
+
+    document.getElementById('closeModalBtn').addEventListener('click', () => {
+      cardModal.classList.add('hidden');
+    });
+
+    if (cardModal) {
+      cardModal.addEventListener('click', (e) => {
+        if (e.target === cardModal) {
+          cardModal.classList.add('hidden');
+        }
+      });
+    }
+
+    /* ==========================================================================
+       BUTTON EVENT BINDINGS & RESET
+       ========================================================================== */
+    document.getElementById('shuffleDeckBtn').addEventListener('click', shufflePack);
+    document.getElementById('nextCardBtn').addEventListener('click', revealNextCard);
+    document.getElementById('prevCardBtn').addEventListener('click', revealPrevCard);
+    
+    document.getElementById('revealAllBtn').addEventListener('click', () => {
+      isFlippedArray = [true, true, true, true, true];
+      if (cardStackContainer) {
+        Array.from(cardStackContainer.children).forEach((cardElem, idx) => {
+          flipCard(cardElem, idx);
+        });
+      }
+    });
+
+    function resetApp() {
+      activeCardIndex = 0;
+      isFlippedArray = [false, false, false, false, false];
+      isPackRipped = false;
+
+      if (packTop) {
+        packTop.style.transform = 'none';
+        packTop.style.opacity = '1';
+      }
+      if (tearProgressBar) {
+        tearProgressBar.style.width = '0%';
+      }
+      if (packCardsPeek) {
+        packCardsPeek.style.opacity = '0';
+        packCardsPeek.style.transform = 'translateY(24px)';
+      }
+      if (boosterPack) {
+        boosterPack.style.transform = 'none';
+      }
+
+      summaryView.classList.add('hidden');
+      deckView.classList.add('hidden');
+      packView.classList.remove('hidden');
+    }
+
+    document.getElementById('resetAppBtn').addEventListener('click', resetApp);
+    document.getElementById('openAnotherPackBtn').addEventListener('click', resetApp);
+
+    /* ==========================================================================
+       INDEXEDDB PERMANENT STORAGE ENGINE FOR CUSTOM CARD ART
+       ========================================================================== */
+    const DB_NAME = 'TCGPackSimulatorDB';
+    const STORE_NAME = 'custom_card_art';
+
+    function openCardDB() {
+      return new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+          reject(new Error("IndexedDB not supported"));
+          return;
+        }
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME);
+          }
+        };
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    async function saveCustomCardsToStorage() {
+      try {
+        const db = await openCardDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const artList = cardDeck.map(card => card.img);
+        store.put(artList, 'user_card_images');
+      } catch (err) {
+        console.warn('IndexedDB save failed, falling back to localStorage:', err);
+        try {
+          localStorage.setItem('tcg_custom_card_art', JSON.stringify(cardDeck.map(c => c.img)));
+        } catch (e) {}
+      }
+    }
+
+    async function loadSavedCardsFromStorage() {
+      try {
+        const db = await openCardDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.get('user_card_images');
+        request.onsuccess = () => {
+          const saved = request.result;
+          if (Array.isArray(saved) && saved.length > 0) {
+            saved.forEach((savedImg, index) => {
+              if (savedImg && cardDeck[index]) {
+                cardDeck[index].img = savedImg;
+              }
+            });
+            updatePackPreview();
+            renderDeckStack();
+          }
+        };
+      } catch (err) {
+        try {
+          const saved = localStorage.getItem('tcg_custom_card_art');
+          if (saved) {
+            JSON.parse(saved).forEach((img, idx) => {
+              if (img && cardDeck[idx]) cardDeck[idx].img = img;
+            });
+            updatePackPreview();
+            renderDeckStack();
+          }
+        } catch (e) {}
+      }
+    }
+
+    function updatePackPreview() {
+      const packImg = document.getElementById('packPreviewImg');
+      if (packImg) {
+        packImg.onerror = () => {
+          packImg.onerror = null;
+          packImg.src = PACK_ART_SVG;
+        };
+        packImg.src = cardDeck[2]?.img || RYU_DEV_VSTAR_SVG;
+      }
+    }
+
+    // Audio Mute Toggle
+    const audioToggleBtn = document.getElementById('audioToggleBtn');
+    audioToggleBtn.addEventListener('click', () => {
+      soundFx.muted = !soundFx.muted;
+      document.getElementById('audioIcon').className = soundFx.muted ? 'fa-solid fa-volume-xmark text-slate-500' : 'fa-solid fa-volume-high text-pink-400';
+      document.getElementById('audioStatusText').textContent = soundFx.muted ? 'Muted' : 'Audio On';
+    });
+
+    // Initialize pack preview artwork
+    document.addEventListener('DOMContentLoaded', () => {
+      updatePackPreview();
+      loadSavedCardsFromStorage();
+    });
+
+    /* ==========================================================================
+       ARTWORK UPLOAD & MANAGEMENT SYSTEM
+       ========================================================================== */
+    const artUploadModal = document.getElementById('artUploadModal');
+    const uploadArtBtn = document.getElementById('uploadArtBtn');
+    const closeArtModalBtn = document.getElementById('closeArtModalBtn');
+    const doneArtModalBtn = document.getElementById('doneArtModalBtn');
+    const uploadSlotsGrid = document.getElementById('uploadSlotsGrid');
+    const bulkFileInput = document.getElementById('bulkFileInput');
+
+    if (uploadArtBtn) {
+      uploadArtBtn.addEventListener('click', () => {
+        renderUploadSlots();
+        if (artUploadModal) artUploadModal.classList.remove('hidden');
+      });
+    }
+
+    if (closeArtModalBtn) closeArtModalBtn.addEventListener('click', () => artUploadModal.classList.add('hidden'));
+    if (doneArtModalBtn) doneArtModalBtn.addEventListener('click', () => artUploadModal.classList.add('hidden'));
+
+    function renderUploadSlots() {
+      if (!uploadSlotsGrid) return;
+      uploadSlotsGrid.innerHTML = '';
+
+      cardDeck.forEach((card, index) => {
+        const slot = document.createElement('div');
+        slot.className = 'bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col justify-between gap-2';
+        
+        const hasCustomImg = card.img && card.img.startsWith('data:image');
+
+        slot.innerHTML = `
+          <div class="flex items-center gap-2">
+            <div class="w-12 h-14 bg-slate-900 rounded-md border border-slate-700 overflow-hidden flex-shrink-0 relative">
+              <img src="${card.img || card.fallback}" class="slot-preview-img w-full h-full object-cover" onerror="this.onerror=null;this.src='${card.fallback}';">
+            </div>
+            <div class="overflow-hidden">
+              <h4 class="text-xs font-bold text-white truncate font-display">${card.name}</h4>
+              <p class="text-[10px] text-pink-400 font-mono truncate">${card.rarity}</p>
+              <span class="text-[9px] ${hasCustomImg ? 'text-emerald-400' : 'text-slate-500'} font-semibold">
+                ${hasCustomImg ? '✓ Custom Art' : 'Using Fallback'}
+              </span>
+            </div>
+          </div>
+          <label class="w-full text-center py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold cursor-pointer transition border border-slate-700 block">
+            <i class="fa-solid fa-upload mr-1"></i> Choose File
+            <input type="file" accept="image/*" class="hidden slot-file-input" data-index="${index}">
+          </label>
+        `;
+
+        const fileInput = slot.querySelector('.slot-file-input');
+        fileInput.addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            processCardImageFile(file, index);
+          }
+        });
+
+        uploadSlotsGrid.appendChild(slot);
+      });
+    }
+
+    function processCardImageFile(file, cardIndex) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        cardDeck[cardIndex].img = dataUrl;
+        saveCustomCardsToStorage();
+        updatePackPreview();
+        renderUploadSlots();
+        if (!deckView.classList.contains('hidden')) renderDeckStack();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    if (bulkFileInput) {
+      bulkFileInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+
+        files.forEach((file) => {
+          const name = file.name.toLowerCase();
+          let targetIndex = -1;
+
+          if (name.includes('vstar') && (name.includes('d-2') || name.includes('devon-d'))) targetIndex = 0;
+          else if (name.includes('vmax')) targetIndex = 1;
+          else if (name.includes('ryu-dev') || name.includes('ryu_dev') || name.includes('ryu & dev')) targetIndex = 2;
+          else if (name.includes('mega')) targetIndex = 3;
+          else if (name.includes('ryuzaki')) targetIndex = 4;
+
+          if (targetIndex === -1) {
+            targetIndex = cardDeck.findIndex(c => !c.img || !c.img.startsWith('data:image'));
+            if (targetIndex === -1) targetIndex = 0;
+          }
+
+          processCardImageFile(file, targetIndex);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
