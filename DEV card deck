@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokémon TCG Pocket - Ryu & Dev Edition Pack Simulator</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        tcgDark: '#080911',
+                        tcgCardBg: '#151828',
+                        tcgGold: '#fbbf24',
+                        tcgPink: '#f472b6',
+                        tcgPurple: '#a855f7'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome for standard icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+
+        body {
+            background-color: #080911;
+            color: #f3f4f6;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Ambient Glow Background */
+        .bg-glow {
+            background: radial-gradient(circle at 50% 30%, rgba(168, 85, 247, 0.18) 0%, rgba(244, 114, 182, 0.1) 35%, rgba(8, 9, 17, 1) 75%);
+        }
+
+        /* 3D Scene Perspective */
+        .perspective-1000 {
+            perspective: 1200px;
+        }
+
+        .transform-style-3d {
+            transform-style: preserve-3d;
+        }
+
+        .backface-hidden {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+
+        /* Booster Pack Tear Effects */
+        .pack-wrapper {
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(244, 114, 182, 0.2);
+        }
+
+        .pack-wrapper:hover {
+            transform: translateY(-8px) scale(1.02) rotateX(4deg);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.9), 0 0 45px rgba(244, 114, 182, 0.4);
+        }
+
+        .tear-line {
+            background: repeating-linear-gradient(
+                90deg,
+                rgba(255,255,255,0.8),
+                rgba(255,255,255,0.8) 8px,
+                transparent 8px,
+                transparent 16px
+            );
+        }
+
+        /* Holographic Foil Overlay */
+        .holo-overlay {
+            background: linear-gradient(
+                var(--holo-angle, 135deg),
+                rgba(255, 0, 128, 0.35) 0%,
+                rgba(255, 230, 0, 0.35) 25%,
+                rgba(0, 255, 200, 0.35) 50%,
+                rgba(0, 150, 255, 0.35) 75%,
+                rgba(220, 0, 255, 0.35) 100%
+            );
+            mix-blend-mode: color-dodge;
+            opacity: var(--holo-opacity, 0);
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+
+        .glare-overlay {
+            background: radial-gradient(
+                circle at var(--glare-x, 50%) var(--glare-y, 50%),
+                rgba(255, 255, 255, 0.75) 0%,
+                rgba(255, 255, 255, 0) 60%
+            );
+            mix-blend-mode: overlay;
+            opacity: var(--holo-opacity, 0);
+            pointer-events: none;
+        }
+
+        /* VSTAR Rainbow Glint Animation */
+        @keyframes rainbowShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .vstar-border {
+            background: linear-gradient(115deg, #ffe066, #f472b6, #a855f7, #38bdf8, #ffe066);
+            background-size: 300% 300%;
+            animation: rainbowShift 6s ease infinite;
+        }
+
+        /* Card Cardboard Texture Shadow */
+        .tcg-card-shadow {
+            box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.7), 0 0 15px rgba(168, 85, 247, 0.15);
+        }
+
+        .tcg-card-shadow:hover {
+            box-shadow: 0 22px 45px -5px rgba(0, 0, 0, 0.85), 0 0 25px rgba(244, 114, 182, 0.4);
+        }
+
+        /* Floating Animation */
+        @keyframes floatSlow {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(1deg); }
+        }
+
+        .animate-float {
+            animation: floatSlow 4s ease-in-out infinite;
+        }
+
+        /* Screen Shake on Chase Pull */
+        @keyframes shake {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            20% { transform: translate(-8px, 6px) rotate(-1deg); }
+            40% { transform: translate(8px, -6px) rotate(1deg); }
+            60% { transform: translate(-5px, 4px) rotate(-0.5deg); }
+            80% { transform: translate(5px, -4px) rotate(0.5deg); }
+        }
+
+        .shake-screen {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        /* Canvas Particle Layer */
+        #particle-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* Custom Scrollbar for Binder */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0d0e1a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a2e48;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #f472b6;
+        }
+    </style>
+</head>
+<body class="bg-glow min-h-screen text-slate-100 flex flex-col justify-between antialiased selection:bg-pink-500 selection:text-white">
+
+    <!-- Particle Overlay Canvas -->
+    <canvas id="particle-canvas"></canvas>
+
+    <!-- Top Navigation Header -->
+    <header class="w-full border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md sticky top-0 z-40 px-4 lg:px-8 py-3">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-pink-500 to-purple-600 flex items-center justify-center shadow-lg shadow-pink-500/30">
+                    <i class="fa-solid fa-bolt text-yellow-300 text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg lg:text-xl font-black tracking-tight bg-gradient-to-r from-pink-400 via-purple-300 to-yellow-300 bg-clip-text text-transparent">
+                        POKÉMON TCG SIM
+                    </h1>
+                    <p class="text-xs text-slate-400 font-medium">Ryu & Dev VSTAR Booster Expansion</p>
+                </div>
+            </div>
+
+            <!-- Stats & Nav Actions -->
+            <div class="flex items-center gap-3 lg:gap-6">
+                <!-- Packs Opened -->
+                <div class="hidden sm:flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-lg text-xs font-semibold">
+                    <i class="fa-solid fa-box-open text-purple-400"></i>
+                    <span class="text-slate-400">Opened:</span>
+                    <span id="stat-packs-opened" class="text-yellow-400 font-bold">0</span>
+                </div>
+
+                <!-- Collection Completion -->
+                <div class="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-lg text-xs font-semibold">
+                    <i class="fa-solid fa-book-bookmark text-pink-400"></i>
+                    <span class="hidden sm:inline text-slate-400">Binder:</span>
+                    <span id="stat-dex-count" class="text-pink-400 font-bold">0/10</span>
+                </div>
+
+                <!-- Sound Toggle -->
+                <button id="btn-audio-toggle" class="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition" title="Toggle Sound">
+                    <i id="audio-icon" class="fa-solid fa-volume-high text-sm"></i>
+                </button>
+
+                <!-- Binder Modal Toggle Button -->
+                <button id="btn-open-binder" class="flex items-center gap-2 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold text-xs lg:text-sm px-4 py-2 rounded-xl shadow-lg shadow-purple-600/30 transition transform hover:scale-105 active:scale-95">
+                    <i class="fa-solid fa-layer-group"></i>
+                    <span>Collection Binder</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Interactive Arena Container -->
+    <main id="main-arena" class="flex-1 flex flex-col items-center justify-center p-4 relative min-h-[82vh]">
+
+        <!-- STAGE 1: BOOSTER PACK VIEW -->
+        <div id="stage-pack-wrapper" class="flex flex-col items-center justify-center w-full max-w-md my-auto">
+            
+            <div class="text-center mb-6">
+                <span class="bg-pink-500/10 border border-pink-500/30 text-pink-300 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-2 inline-block">
+                    ★ Ultra Rare VSTAR Chase Included ★
+                </span>
+                <h2 class="text-2xl lg:text-3xl font-black tracking-tight text-white mt-1">
+                    Swipe or Click to Tear Open!
+                </h2>
+                <p class="text-xs lg:text-sm text-slate-400 mt-1">
+                    Contains 5 Trading Cards • Guaranteed Rare or Higher
+                </p>
+            </div>
+
+            <!-- 3D Interactive Foil Pack Envelope -->
+            <div class="perspective-1000 w-full flex justify-center cursor-pointer">
+                <div id="booster-pack" class="pack-wrapper relative w-64 lg:w-72 h-[400px] lg:h-[440px] rounded-2xl overflow-hidden border-2 border-yellow-400/40 transform-style-3d bg-slate-900 transition-transform">
+                    
+                    <!-- Metallic Foil Shine Layer -->
+                    <div class="absolute inset-0 bg-gradient-to-tr from-purple-900/60 via-pink-600/30 to-yellow-300/40 z-10 pointer-events-none"></div>
+
+                    <!-- TOP TEAR PIECE -->
+                    <div id="pack-top-strip" class="absolute top-0 left-0 w-full h-16 bg-slate-900 border-b border-yellow-400/50 z-30 transition-transform duration-500 flex items-center justify-center overflow-hidden">
+                        <div class="absolute inset-0 vstar-border opacity-30"></div>
+                        <!-- Tear Line Dots -->
+                        <div class="absolute bottom-1 w-full h-1 tear-line opacity-70"></div>
+                        <div class="text-xs font-black tracking-widest text-yellow-300 uppercase z-10 flex items-center gap-1">
+                            <i class="fa-solid fa-scissors text-pink-400"></i> PULL HERE TO TEAR <i class="fa-solid fa-scissors text-pink-400"></i>
+                        </div>
+                    </div>
+
+                    <!-- MAIN BODY OF PACK -->
+                    <div class="absolute inset-0 pt-16 flex flex-col items-center justify-between p-4 bg-gradient-to-b from-slate-900 via-purple-950 to-slate-950">
+                        
+                        <!-- Header Logos on Pack -->
+                        <div class="text-center z-10">
+                            <div class="text-[10px] font-black tracking-widest text-pink-400 uppercase">POKÉMON TCG POCKET</div>
+                            <div class="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-pink-300 to-purple-300">
+                                RYU & DEV VSTAR
+                            </div>
+                        </div>
+
+                        <!-- Pack Cover Artwork Image -->
+                        <div class="relative w-48 h-56 lg:w-52 lg:h-60 rounded-xl overflow-hidden border border-purple-500/30 shadow-2xl z-10 my-auto">
+                            <img src="--ryu-dev.jpg" alt="Ryu & Dev VSTAR Artwork" class="w-full h-full object-cover object-center" onerror="this.onerror=null; this.src='https://placehold.co/400x600/2a1a40/ffffff?text=Ryu+%26+Dev+VSTAR';">
+                            <!-- Holo overlay on pack artwork -->
+                            <div class="absolute inset-0 bg-gradient-to-tr from-transparent via-pink-500/20 to-yellow-300/30"></div>
+                        </div>
+
+                        <!-- Bottom Pack Info -->
+                        <div class="w-full text-center z-10">
+                            <div class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">5 CARDS PER PACK</div>
+                            <div class="flex justify-center items-center gap-1 text-yellow-400 text-xs mt-0.5">
+                                <i class="fa-solid fa-star"></i>
+                                <i class="fa-solid fa-star"></i>
+                                <i class="fa-solid fa-star"></i>
+                                <span class="text-[10px] font-bold text-slate-300 ml-1">BOOSTER SET</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Tear Action Button -->
+            <button id="btn-tear-pack" class="mt-8 bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600 hover:from-yellow-300 hover:to-purple-500 text-slate-950 font-black text-base px-8 py-3.5 rounded-2xl shadow-xl shadow-pink-500/25 transition transform hover:scale-105 active:scale-95 flex items-center gap-3">
+                <i class="fa-solid fa-bolt text-slate-950"></i>
+                <span>OPEN BOOSTER PACK</span>
+            </button>
+        </div>
+
+
+        <!-- STAGE 2: CARDS TABLEMAT REVEAL VIEW (Initially Hidden) -->
+        <div id="stage-cards-reveal" class="hidden w-full max-w-6xl flex-col items-center justify-center my-auto py-4">
+            
+            <!-- Controls Bar above cards -->
+            <div class="w-full flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 px-4">
+                <div class="text-center sm:text-left">
+                    <h3 class="text-xl font-extrabold text-white">Your Pack Pulls</h3>
+                    <p id="reveal-status-text" class="text-xs text-pink-300 font-medium">Click each card to reveal its contents!</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="btn-reveal-all" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-2">
+                        <i class="fa-solid fa-eye"></i>
+                        <span>Reveal All Cards</span>
+                    </button>
+                    <button id="btn-open-another" class="hidden bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-purple-600/30 transition transform hover:scale-105 flex items-center gap-2">
+                        <i class="fa-solid fa-rotate-right"></i>
+                        <span>Open Next Pack</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 5 Cards Layout Mat -->
+            <div id="cards-container" class="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 lg:gap-6 px-2 lg:px-4 perspective-1000 min-h-[380px] items-center justify-items-center">
+                <!-- Dynamically Populated Cards go here -->
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- FULL SCREEN BINDER / COLLECTION MODAL -->
+    <div id="binder-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex flex-col hidden transition-opacity duration-300">
+        <!-- Binder Header -->
+        <div class="p-4 lg:p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-purple-600/30 border border-purple-500/40 flex items-center justify-center text-purple-400">
+                    <i class="fa-solid fa-book-bookmark text-xl"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-black text-white">Collection Binder & Dex</h2>
+                    <p class="text-xs text-slate-400">Ryu & Dev VSTAR Set Expansion (10 Cards Total)</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <button id="btn-show-odds" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-2 rounded-lg font-semibold transition">
+                    <i class="fa-solid fa-chart-pie mr-1 text-pink-400"></i> Drop Rates
+                </button>
+                <button id="btn-close-binder" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Binder Body Content -->
+        <div class="flex-1 overflow-y-auto p-4 lg:p-8">
+            <div class="max-w-7xl mx-auto">
+                <!-- Set Progress Bar -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 lg:p-6 mb-8">
+                    <div class="flex justify-between items-center mb-2 text-sm font-bold">
+                        <span class="text-slate-300">Expansion Completion Progress</span>
+                        <span id="binder-progress-percent" class="text-pink-400">0%</span>
+                    </div>
+                    <div class="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                        <div id="binder-progress-bar" class="h-full bg-gradient-to-r from-pink-500 via-purple-500 to-yellow-400 rounded-full w-0 transition-all duration-500"></div>
+                    </div>
+                </div>
+
+                <!-- Binder Grid -->
+                <div id="binder-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 lg:gap-6">
+                    <!-- Dynamic Binder Slot Items -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3D CARD INSPECTOR MODAL (When clicking card in binder or reveal) -->
+    <div id="inspector-modal" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-center p-4 hidden">
+        <!-- Close button top right -->
+        <button id="btn-close-inspector" class="absolute top-6 right-6 w-12 h-12 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-xl transition z-50">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+
+        <div class="text-center mb-4 z-10">
+            <span id="inspector-card-rarity" class="text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                Ultra Rare VSTAR
+            </span>
+            <h3 id="inspector-card-name" class="text-2xl font-black text-white mt-2">Ryu & Dev VSTAR</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Drag / Hover over card to inspect interactive 3D Holographic Foil</p>
+        </div>
+
+        <!-- Interactive 3D Card Holder -->
+        <div class="perspective-1000 w-full max-w-sm flex justify-center items-center py-4">
+            <div id="inspector-card-target" class="w-72 lg:w-80 h-[430px] lg:h-[480px] relative rounded-2xl transform-style-3d tcg-card-shadow transition-transform duration-100 cursor-grab active:cursor-grabbing">
+                <!-- Dynamic Card Inner HTML inserted by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ODDS MODAL -->
+    <div id="odds-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-black text-white">Rarity Pull Rates</h3>
+                <button id="btn-close-odds" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="space-y-3 text-sm">
+                <div class="flex justify-between items-center p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                    <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-slate-400"></span> Common</span>
+                    <span class="font-bold text-slate-200">60.0%</span>
+                </div>
+                <div class="flex justify-between items-center p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                    <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-400"></span> Uncommon</span>
+                    <span class="font-bold text-blue-300">25.0%</span>
+                </div>
+                <div class="flex justify-between items-center p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                    <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-400"></span> Rare Holo</span>
+                    <span class="font-bold text-yellow-300">10.0%</span>
+                </div>
+                <div class="flex justify-between items-center p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                    <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-pink-500"></span> Ultra Rare VSTAR</span>
+                    <span class="font-bold text-pink-400">5.0%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="w-full border-t border-slate-800/60 py-4 px-6 text-center text-xs text-slate-500">
+        <p>Pokémon TCG Pack Simulator • Custom Ryu & Dev VSTAR Edition • Designed for GitHub Pages</p>
+    </footer>
+
+    <!-- JAVASCRIPT APPLICATION LOGIC -->
+    <script>
+        /* ==========================================================================
+           1. CARD DATABASE (10 Unique Custom Cards)
+           ========================================================================== */
+        const CARD_SET = [
+            {
+                id: 'rd-vstar-001',
+                name: 'Ryu & Dev VSTAR',
+                type: 'Fairy',
+                hp: 300,
+                rarity: 'VSTAR',
+                rarityTier: 3, // 0: Common, 1: Uncommon, 2: Rare Holo, 3: Ultra Rare VSTAR
+                image: '--ryu-dev.jpg',
+                isCustomImage: true,
+                stage: 'Evolves from Luvdisc',
+                moveName: 'Aggressive Cuddling',
+                moveCost: ['fairy', 'fairy', 'colorless', 'colorless'],
+                moveDesc: 'The Defending Pokémon is now Paralyzed due to excessive affection, heavy limbs, and a complete lack of personal space. (You can\'t use more than 1 VSTAR Power in a game.)',
+                weakness: 'Dark x2',
+                retreat: 3,
+                flavor: 'VSTAR Power: Unstoppable romantic affection overload!'
+            },
+            {
+                id: 'luvdisc-002',
+                name: 'Luvdisc',
+                type: 'Water',
+                hp: 70,
+                rarity: 'Common',
+                rarityTier: 0,
+                bgColor: 'from-blue-600 to-cyan-500',
+                moveName: 'Heart Stamp',
+                moveCost: ['water'],
+                moveDamage: '30',
+                moveDesc: 'Flips a heart-shaped coin. If heads, heal 20 HP from Luvdisc.',
+                weakness: 'Lightning x2',
+                retreat: 1,
+                flavor: 'It lives in warm seas. It is said that any couple that meets a Luvdisc will be blessed with eternal love.'
+            },
+            {
+                id: 'pixel-pika-003',
+                name: 'Pixel Pikachu',
+                type: 'Lightning',
+                hp: 90,
+                rarity: 'Rare Holo',
+                rarityTier: 2,
+                bgColor: 'from-amber-500 to-yellow-400',
+                moveName: 'Electro Spark',
+                moveCost: ['lightning', 'colorless'],
+                moveDamage: '60',
+                moveDesc: 'This attack does 20 damage to 1 of your opponent\'s Benched Pokémon.',
+                weakness: 'Fighting x2',
+                retreat: 1,
+                flavor: 'When it loiters in retro city streets, thunderbolts flash from its cheeks.'
+            },
+            {
+                id: 'city-stadium-004',
+                name: 'City Night Alley',
+                type: 'Trainer',
+                hp: null,
+                rarity: 'Uncommon',
+                rarityTier: 1,
+                bgColor: 'from-purple-800 to-indigo-900',
+                cardCategory: 'Stadium',
+                moveName: 'Neon Glow',
+                moveDesc: 'Once during each player\'s turn, that player may draw 1 card if their Active Pokémon is a Fairy or Heart type.',
+                flavor: 'Lust in the city, no quiet nights.'
+            },
+            {
+                id: 'dev-glasses-005',
+                name: 'Dev\'s Pixel Glasses',
+                type: 'Trainer',
+                hp: null,
+                rarity: 'Uncommon',
+                rarityTier: 1,
+                bgColor: 'from-slate-700 to-slate-900',
+                cardCategory: 'Item',
+                moveName: 'Focus Vision',
+                moveDesc: 'Look at the top 5 cards of your deck. You may reveal 1 VSTAR card found there and put it into your hand.',
+                flavor: 'Grants +100 coding focus and sharp style.'
+            },
+            {
+                id: 'ryu-jacket-006',
+                name: 'Ryu\'s Biker Jacket',
+                type: 'Trainer',
+                hp: null,
+                rarity: 'Uncommon',
+                rarityTier: 1,
+                bgColor: 'from-red-900 to-slate-900',
+                cardCategory: 'Item',
+                moveName: 'Cozy Defense',
+                moveDesc: 'The Pokémon this card is attached to takes 30 less damage from opponent attacks.',
+                flavor: 'Warm, stylish, and smells like urban adventure.'
+            },
+            {
+                id: 'heart-energy-007',
+                name: 'Special Heart Energy',
+                type: 'Energy',
+                hp: null,
+                rarity: 'Common',
+                rarityTier: 0,
+                bgColor: 'from-pink-600 to-rose-400',
+                cardCategory: 'Special Energy',
+                moveName: 'Affection Boost',
+                moveDesc: 'Provides Fairy Energy. The Pokémon this card is attached to recovers 10 HP between turns.',
+                flavor: 'Pulsing with warm affection.'
+            },
+            {
+                id: 'cozy-cafe-008',
+                name: 'Cozy Café Date',
+                type: 'Trainer',
+                hp: null,
+                rarity: 'Common',
+                rarityTier: 0,
+                bgColor: 'from-amber-800 to-amber-600',
+                cardCategory: 'Supporter',
+                moveName: 'Coffee Break',
+                moveDesc: 'Heal 60 damage from your Active Pokémon and remove all Special Conditions.',
+                flavor: 'A quiet table for two amidst the bustling city.'
+            },
+            {
+                id: 'luvdisc-swarm-009',
+                name: 'Luvdisc Swarm',
+                type: 'Water',
+                hp: 110,
+                rarity: 'Rare Holo',
+                rarityTier: 2,
+                bgColor: 'from-cyan-600 to-blue-500',
+                moveName: 'Passionate Wave',
+                moveCost: ['water', 'water', 'colorless'],
+                moveDamage: '90',
+                moveDesc: 'Attach a Water Energy from your discard pile to 1 of your Benched Pokémon.',
+                weakness: 'Lightning x2',
+                retreat: 2,
+                flavor: 'In spring, schoolings of Luvdisc cover the ocean surface in glowing pink hearts.'
+            },
+            {
+                id: 'romance-vstar-010',
+                name: 'Romance Aura VSTAR',
+                type: 'Fairy',
+                hp: 280,
+                rarity: 'VSTAR',
+                rarityTier: 3,
+                bgColor: 'from-fuchsia-600 to-pink-500',
+                stage: 'VSTAR Power',
+                moveName: 'Eternal Sparkle',
+                moveCost: ['fairy', 'colorless', 'colorless'],
+                moveDamage: '220',
+                moveDesc: 'Discard 2 Energy attached to this Pokémon. During your opponent\'s next turn, this Pokémon takes no damage.',
+                weakness: 'Metal x2',
+                retreat: 2,
+                flavor: 'Surrounds the battlefield in brilliant rainbow stardust.'
+            }
+        ];
+
+        /* ==========================================================================
+           2. WEB AUDIO SYNTHESIZER (Zero external sound asset dependencies)
+           ========================================================================== */
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playTear() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                
+                // White noise for foil rip
+                const bufferSize = this.ctx.sampleRate * 0.35;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(1000, now);
+                filter.frequency.exponentialRampToValueAtTime(3500, now + 0.3);
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.6, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                noise.start(now);
+            }
+
+            playFlip() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(250, now);
+                osc.frequency.exponentialRampToValueAtTime(600, now + 0.08);
+
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.09);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.1);
+            }
+
+            playSparkle() {
+                if (!this.enabled) return;
+                this.init();
+                const notes = [1046.5, 1318.5, 1567.98, 2093.0]; // C6, E6, G6, C7
+                notes.forEach((freq, i) => {
+                    const now = this.ctx.currentTime + (i * 0.06);
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now);
+
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                });
+            }
+
+            playVStarFanfare() {
+                if (!this.enabled) return;
+                this.init();
+                // Major Fanfare Chord Progression: C4, E4, G4, C5 + High shimmer
+                const chords = [
+                    { time: 0.0, freqs: [523.25, 659.25, 783.99] }, // C Major
+                    { time: 0.15, freqs: [587.33, 698.46, 880.00] }, // D Minor
+                    { time: 0.30, freqs: [659.25, 783.99, 1046.50] }, // E Minor / C
+                    { time: 0.48, freqs: [1046.50, 1318.51, 1567.98, 2093.00] } // Epic Victory C Major
+                ];
+
+                chords.forEach(chord => {
+                    chord.freqs.forEach(freq => {
+                        const now = this.ctx.currentTime + chord.time;
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(freq, now);
+
+                        const filter = this.ctx.createBiquadFilter();
+                        filter.type = 'lowpass';
+                        filter.frequency.setValueAtTime(2000, now);
+
+                        gain.gain.setValueAtTime(0.18, now);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+                        osc.connect(filter);
+                        filter.connect(gain);
+                        gain.connect(this.ctx.destination);
+
+                        osc.start(now);
+                        osc.stop(now + 0.65);
+                    });
+                });
+            }
+        }
+
+        const soundFX = new SoundFX();
+
+        /* ==========================================================================
+           3. CANVAS PARTICLE SYSTEM
+           ========================================================================== */
+        const canvas = document.getElementById('particle-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Particle {
+            constructor(x, y, color, isHeart = false) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.radius = Math.random() * 4 + 2;
+                this.vx = (Math.random() - 0.5) * 12;
+                this.vy = (Math.random() - 0.5) * 12 - 3;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.02 + 0.015;
+                this.isHeart = isHeart;
+                this.rotation = Math.random() * Math.PI * 2;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.fillStyle = this.color;
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+
+                if (this.isHeart) {
+                    // Draw small heart shape
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.bezierCurveTo(-5, -5, -10, 2, 0, 10);
+                    ctx.bezierCurveTo(10, 2, 5, -5, 0, 0);
+                    ctx.fill();
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.2; // Gravity
+                this.alpha -= this.decay;
+                this.rotation += 0.05;
+            }
+        }
+
+        function triggerExplosion(x, y, count = 60, isChase = false) {
+            const colors = isChase 
+                ? ['#f472b6', '#fbbf24', '#a855f7', '#38bdf8', '#ffffff'] 
+                : ['#fbbf24', '#ffffff', '#e2e8f0', '#f472b6'];
+
+            for (let i = 0; i < count; i++) {
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                particles.push(new Particle(x, y, color, isChase && Math.random() > 0.5));
+            }
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+            requestAnimationFrame(animateParticles);
+        }
+        animateParticles();
+
+
+        /* ==========================================================================
+           4. STATE & APP LOGIC
+           ========================================================================== */
+        let state = {
+            packsOpened: 0,
+            collection: {}, // Map of card.id -> quantity
+            currentPack: [], // Current 5 pulled cards
+            soundEnabled: true
+        };
+
+        // Load state from localStorage
+        function loadState() {
+            const saved = localStorage.getItem('pokemon_tcg_sim_save');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    state.packsOpened = parsed.packsOpened || 0;
+                    state.collection = parsed.collection || {};
+                } catch(e) {
+                    console.error("Failed to load save", e);
+                }
+            }
+            updateHeaderStats();
+        }
+
+        function saveState() {
+            localStorage.setItem('pokemon_tcg_sim_save', JSON.stringify({
+                packsOpened: state.packsOpened,
+                collection: state.collection
+            }));
+            updateHeaderStats();
+        }
+
+        function updateHeaderStats() {
+            document.getElementById('stat-packs-opened').innerText = state.packsOpened;
+            const uniqueOwned = Object.keys(state.collection).length;
+            document.getElementById('stat-dex-count').innerText = `${uniqueOwned}/10`;
+            
+            // Binder progress bar
+            const percent = Math.round((uniqueOwned / 10) * 100);
+            document.getElementById('binder-progress-percent').innerText = `${percent}%`;
+            document.getElementById('binder-progress-bar').style.width = `${percent}%`;
+        }
+
+
+        /* ==========================================================================
+           5. PACK GENERATOR LOGIC
+           ========================================================================== */
+        function generatePack() {
+            // Pack of 5 cards:
+            // Card 1-3: Common (60% weight) or Uncommon
+            // Card 4: Guaranteed Uncommon or higher
+            // Card 5: Rare Holo (10%) or Ultra Rare VSTAR (5%) or Common/Uncommon
+            const pack = [];
+
+            const getWeightedCard = (minTier = 0) => {
+                const rand = Math.random() * 100;
+                let targetRarity = 0; // Common
+
+                if (minTier >= 3 || (minTier === 0 && rand < 5)) {
+                    // VSTAR
+                    targetRarity = 3;
+                } else if (minTier >= 2 || (minTier === 0 && rand < 15)) {
+                    // Rare Holo
+                    targetRarity = 2;
+                } else if (minTier >= 1 || (minTier === 0 && rand < 40)) {
+                    // Uncommon
+                    targetRarity = 1;
+                } else {
+                    targetRarity = 0;
+                }
+
+                // Filter pool by targetRarity
+                let pool = CARD_SET.filter(c => c.rarityTier === targetRarity);
+                if (pool.length === 0) pool = CARD_SET; // Fallback
+
+                return pool[Math.floor(Math.random() * pool.length)];
+            };
+
+            // Slot 1, 2, 3: Commons / Uncommons
+            pack.push(getWeightedCard(0));
+            pack.push(getWeightedCard(0));
+            pack.push(getWeightedCard(0));
+            
+            // Slot 4: Guaranteed Uncommon or higher
+            pack.push(getWeightedCard(1));
+
+            // Slot 5: High chance Rare / VSTAR Chase Slot!
+            const hitRoll = Math.random() * 100;
+            if (hitRoll < 20) {
+                // Guaranteed VSTAR (20% of slot 5 -> overall 5% pack rate)
+                const vstarPool = CARD_SET.filter(c => c.rarityTier === 3);
+                pack.push(vstarPool[Math.floor(Math.random() * vstarPool.length)]);
+            } else if (hitRoll < 55) {
+                // Guaranteed Rare Holo
+                const rarePool = CARD_SET.filter(c => c.rarityTier === 2);
+                pack.push(rarePool[Math.floor(Math.random() * rarePool.length)]);
+            } else {
+                pack.push(getWeightedCard(1));
+            }
+
+            return pack;
+        }
+
+
+        /* ==========================================================================
+           6. CARD COMPONENT GENERATOR (Renders SVG/HTML Cards)
+           ========================================================================== */
+        function createCardHTML(card, isFlipped = false, index = 0) {
+            const isVStar = card.rarityTier === 3;
+            const isHolo = card.rarityTier >= 2;
+
+            // Render Custom Ryu & Dev VSTAR Card
+            let cardFrontInner = '';
+
+            if (card.isCustomImage) {
+                cardFrontInner = `
+                    <div class="relative w-full h-full rounded-xl overflow-hidden bg-slate-900 border-2 ${isVStar ? 'border-yellow-300' : 'border-slate-700'} flex flex-col justify-between">
+                        <!-- VSTAR Rainbow Border Glint -->
+                        ${isVStar ? '<div class="absolute inset-0 vstar-border p-[3px] pointer-events-none z-30 opacity-70"></div>' : ''}
+                        
+                        <!-- High Res Image -->
+                        <img src="${card.image}" alt="${card.name}" class="absolute inset-0 w-full h-full object-cover object-center z-0" onerror="this.onerror=null; this.src='https://placehold.co/400x600/2a1a40/ffffff?text=Ryu+%26+Dev+VSTAR';">
+                        
+                        <!-- Holographic Glare Layer -->
+                        <div class="holo-overlay absolute inset-0 z-10"></div>
+                        <div class="glare-overlay absolute inset-0 z-20"></div>
+                    </div>
+                `;
+            } else {
+                // Standard Graphic Card Template
+                cardFrontInner = `
+                    <div class="relative w-full h-full rounded-xl overflow-hidden bg-gradient-to-b ${card.bgColor || 'from-slate-800 to-slate-950'} border-2 ${isHolo ? 'border-yellow-400' : 'border-slate-700'} p-3 flex flex-col justify-between select-none">
+                        <!-- Holographic Glare Layer -->
+                        ${isHolo ? '<div class="holo-overlay absolute inset-0 z-10"></div><div class="glare-overlay absolute inset-0 z-20"></div>' : ''}
+
+                        <!-- Header -->
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <span class="text-[9px] font-black tracking-widest text-yellow-300 uppercase block">${card.stage || card.cardCategory || 'Basic'}</span>
+                                <h4 class="text-sm font-black text-white tracking-tight leading-none">${card.name}</h4>
+                            </div>
+                            ${card.hp ? `<div class="text-right"><span class="text-[9px] text-slate-300 font-bold">HP</span> <span class="text-sm font-black text-pink-300">${card.hp}</span></div>` : ''}
+                        </div>
+
+                        <!-- Card Artwork Box -->
+                        <div class="my-2 w-full h-32 rounded-lg bg-slate-950/70 border border-slate-700/60 relative overflow-hidden flex items-center justify-center z-10">
+                            <div class="absolute inset-0 bg-gradient-to-tr from-purple-500/10 to-pink-500/20"></div>
+                            <i class="fa-solid ${getCardIcon(card.type)} text-4xl text-slate-300/80"></i>
+                            ${isHolo ? '<div class="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-300/10 to-transparent animate-pulse"></div>' : ''}
+                        </div>
+
+                        <!-- Move / Description Section -->
+                        <div class="bg-slate-950/80 rounded-lg p-2 border border-slate-800 text-left z-10 my-1">
+                            <div class="flex items-center justify-between font-bold text-xs text-yellow-300 mb-0.5">
+                                <span>${card.moveName || 'Special Ability'}</span>
+                                ${card.moveDamage ? `<span class="text-white">${card.moveDamage}</span>` : ''}
+                            </div>
+                            <p class="text-[10px] text-slate-300 leading-tight">${card.moveDesc}</p>
+                        </div>
+
+                        <!-- Footer / Rarity -->
+                        <div class="flex justify-between items-center text-[9px] text-slate-400 z-10 pt-1 border-t border-slate-800">
+                            <span>${card.weakness ? `Weak: ${card.weakness}` : 'Set #00' + (CARD_SET.indexOf(card)+1)}</span>
+                            <span class="font-bold text-yellow-400 uppercase tracking-wider">${card.rarity}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Pokéball Card Back Graphic (Crisp SVG)
+            const cardBackInner = `
+                <div class="w-full h-full rounded-xl bg-slate-950 border-2 border-yellow-400/80 p-2.5 flex flex-col items-center justify-between relative overflow-hidden shadow-2xl">
+                    <div class="absolute inset-0 bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950"></div>
+                    
+                    <!-- Decorative Ring -->
+                    <div class="w-full h-full rounded-lg border border-yellow-400/30 flex items-center justify-center relative z-10">
+                        <div class="w-24 h-24 rounded-full border-4 border-yellow-400/60 flex items-center justify-center relative">
+                            <div class="w-full h-1 bg-yellow-400/60 absolute"></div>
+                            <div class="w-8 h-8 rounded-full bg-slate-950 border-4 border-yellow-400/80 z-10 flex items-center justify-center">
+                                <div class="w-2.5 h-2.5 rounded-full bg-yellow-300"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="relative z-10 text-[9px] font-black tracking-widest text-yellow-400/80 uppercase">
+                        POKÉMON TCG
+                    </div>
+                </div>
+            `;
+
+            return `
+                <div class="tcg-card-item w-full max-w-[200px] h-72 sm:h-80 relative cursor-pointer transform-style-3d transition-transform duration-500 tcg-card-shadow rounded-xl ${isFlipped ? '[transform:rotateY(180deg)]' : ''}" data-index="${index}">
+                    <!-- Card Back -->
+                    <div class="absolute inset-0 w-full h-full backface-hidden rounded-xl">
+                        ${cardBackInner}
+                    </div>
+                    <!-- Card Front -->
+                    <div class="absolute inset-0 w-full h-full backface-hidden rounded-xl [transform:rotateY(180deg)]">
+                        ${cardFrontInner}
+                    </div>
+                </div>
+            `;
+        }
+
+        function getCardIcon(type) {
+            switch(type) {
+                case 'Fairy': return 'fa-heart';
+                case 'Water': return 'fa-droplet';
+                case 'Lightning': return 'fa-bolt';
+                case 'Trainer': return 'fa-id-card';
+                case 'Energy': return 'fa-atom';
+                default: return 'fa-star';
+            }
+        }
+
+
+        /* ==========================================================================
+           7. PACK OPENING ANIMATION & INTERACTION
+           ========================================================================== */
+        const btnTearPack = document.getElementById('btn-tear-pack');
+        const boosterPack = document.getElementById('booster-pack');
+        const packTopStrip = document.getElementById('pack-top-strip');
+        const stagePackWrapper = document.getElementById('stage-pack-wrapper');
+        const stageCardsReveal = document.getElementById('stage-cards-reveal');
+        const cardsContainer = document.getElementById('cards-container');
+        const btnRevealAll = document.getElementById('btn-reveal-all');
+        const btnOpenAnother = document.getElementById('btn-open-another');
+        const revealStatusText = document.getElementById('reveal-status-text');
+
+        function executePackTear() {
+            soundFX.playTear();
+
+            // Trigger tear particle effect at top of pack
+            const packRect = boosterPack.getBoundingClientRect();
+            triggerExplosion(packRect.left + packRect.width / 2, packRect.top + 40, 50, false);
+
+            // Animate top strip ripping off
+            packTopStrip.style.transform = 'translateY(-100px) rotate(-15deg)';
+            packTopStrip.style.opacity = '0';
+            boosterPack.style.transform = 'translateY(80px) scale(0.9)';
+            boosterPack.style.opacity = '0';
+
+            // Increase stats
+            state.packsOpened++;
+
+            // Generate 5 cards
+            state.currentPack = generatePack();
+
+            // Record to collection
+            state.currentPack.forEach(c => {
+                state.collection[c.id] = (state.collection[c.id] || 0) + 1;
+            });
+            saveState();
+
+            // Transition stage after short animation delay
+            setTimeout(() => {
+                stagePackWrapper.classList.add('hidden');
+                stageCardsReveal.classList.remove('hidden');
+                stageCardsReveal.classList.add('flex');
+
+                renderRevealCards();
+
+                // Reset pack view styles for next time
+                packTopStrip.style.transform = 'none';
+                packTopStrip.style.opacity = '1';
+                boosterPack.style.transform = 'none';
+                boosterPack.style.opacity = '1';
+            }, 600);
+        }
+
+        btnTearPack.addEventListener('click', executePackTear);
+        boosterPack.addEventListener('click', executePackTear);
+
+        function renderRevealCards() {
+            cardsContainer.innerHTML = '';
+            btnOpenAnother.classList.add('hidden');
+            btnRevealAll.classList.remove('hidden');
+            revealStatusText.innerText = 'Click each card to reveal its contents!';
+
+            state.currentPack.forEach((card, idx) => {
+                const cardWrapper = document.createElement('div');
+                cardWrapper.className = 'w-full flex justify-center animate-float';
+                cardWrapper.style.animationDelay = `${idx * 0.15}s`;
+                cardWrapper.innerHTML = createCardHTML(card, false, idx);
+
+                const cardEl = cardWrapper.querySelector('.tcg-card-item');
+
+                // Card Click Flip Logic
+                cardEl.addEventListener('click', () => {
+                    flipCard(cardEl, card, idx);
+                });
+
+                // Attach 3D Holographic Tilt Trackers
+                attachHoloTiltListeners(cardEl);
+
+                cardsContainer.appendChild(cardWrapper);
+            });
+        }
+
+        function flipCard(cardEl, card, idx) {
+            if (cardEl.classList.contains('is-flipped')) return;
+
+            cardEl.classList.add('is-flipped');
+            cardEl.style.transform = 'rotateY(180deg)';
+
+            soundFX.playFlip();
+
+            // Check if Chase VSTAR or Rare
+            if (card.rarityTier === 3) {
+                // Chase Card VSTAR Reveal FX!
+                setTimeout(() => {
+                    soundFX.playVStarFanfare();
+                    document.body.classList.add('shake-screen');
+                    setTimeout(() => document.body.classList.remove('shake-screen'), 500);
+
+                    const rect = cardEl.getBoundingClientRect();
+                    triggerExplosion(rect.left + rect.width / 2, rect.top + rect.height / 2, 100, true);
+                }, 200);
+            } else if (card.rarityTier === 2) {
+                soundFX.playSparkle();
+                const rect = cardEl.getBoundingClientRect();
+                triggerExplosion(rect.left + rect.width / 2, rect.top + rect.height / 2, 40, false);
+            }
+
+            checkAllCardsFlipped();
+        }
+
+        function checkAllCardsFlipped() {
+            const allCards = cardsContainer.querySelectorAll('.tcg-card-item');
+            const flippedCount = cardsContainer.querySelectorAll('.tcg-card-item.is-flipped').length;
+
+            if (flippedCount === allCards.length) {
+                btnRevealAll.classList.add('hidden');
+                btnOpenAnother.classList.remove('hidden');
+                revealStatusText.innerText = '★ All cards revealed! Open another pack or check your Binder.';
+            }
+        }
+
+        btnRevealAll.addEventListener('click', () => {
+            const allCardEls = cardsContainer.querySelectorAll('.tcg-card-item');
+            allCardEls.forEach((cardEl, idx) => {
+                setTimeout(() => {
+                    const card = state.currentPack[idx];
+                    flipCard(cardEl, card, idx);
+                }, idx * 120);
+            });
+        });
+
+        btnOpenAnother.addEventListener('click', () => {
+            stageCardsReveal.classList.add('hidden');
+            stageCardsReveal.classList.remove('flex');
+            stagePackWrapper.classList.remove('hidden');
+        });
+
+
+        /* ==========================================================================
+           8. 3D HOLOGRAM TILT SYSTEM
+           ========================================================================== */
+        function attachHoloTiltListeners(cardEl) {
+            cardEl.addEventListener('mousemove', (e) => {
+                if (!cardEl.classList.contains('is-flipped')) return;
+
+                const rect = cardEl.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+
+                const rotateX = ((y - centerY) / centerY) * -18;
+                const rotateY = ((x - centerX) / centerX) * 18 + 180; // +180 for flipped state
+
+                const glareX = (x / rect.width) * 100;
+                const glareY = (y / rect.height) * 100;
+                const angle = Math.atan2(y - centerY, x - centerX) * (180 / Math.PI);
+
+                cardEl.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.04)`;
+
+                const holoOverlay = cardEl.querySelector('.holo-overlay');
+                const glareOverlay = cardEl.querySelector('.glare-overlay');
+
+                if (holoOverlay) {
+                    holoOverlay.style.setProperty('--holo-angle', `${angle}deg`);
+                    holoOverlay.style.setProperty('--holo-opacity', '0.7');
+                }
+                if (glareOverlay) {
+                    glareOverlay.style.setProperty('--glare-x', `${glareX}%`);
+                    glareOverlay.style.setProperty('--glare-y', `${glareY}%`);
+                    glareOverlay.style.setProperty('--holo-opacity', '0.6');
+                }
+            });
+
+            cardEl.addEventListener('mouseleave', () => {
+                if (cardEl.classList.contains('is-flipped')) {
+                    cardEl.style.transform = 'rotateY(180deg)';
+                } else {
+                    cardEl.style.transform = 'none';
+                }
+
+                const holoOverlay = cardEl.querySelector('.holo-overlay');
+                const glareOverlay = cardEl.querySelector('.glare-overlay');
+                if (holoOverlay) holoOverlay.style.setProperty('--holo-opacity', '0');
+                if (glareOverlay) glareOverlay.style.setProperty('--holo-opacity', '0');
+            });
+        }
+
+
+        /* ==========================================================================
+           9. COLLECTION BINDER & INSPECTOR MODAL
+           ========================================================================== */
+        const binderModal = document.getElementById('binder-modal');
+        const binderGrid = document.getElementById('binder-grid');
+        const btnOpenBinder = document.getElementById('btn-open-binder');
+        const btnCloseBinder = document.getElementById('btn-close-binder');
+
+        const inspectorModal = document.getElementById('inspector-modal');
+        const inspectorCardTarget = document.getElementById('inspector-card-target');
+        const btnCloseInspector = document.getElementById('btn-close-inspector');
+
+        function renderBinder() {
+            binderGrid.innerHTML = '';
+
+            CARD_SET.forEach(card => {
+                const qty = state.collection[card.id] || 0;
+                const isUnlocked = qty > 0;
+
+                const slotEl = document.createElement('div');
+                slotEl.className = `relative rounded-xl border p-2 flex flex-col items-center justify-between cursor-pointer transition transform hover:scale-105 ${isUnlocked ? 'bg-slate-900 border-slate-700 hover:border-pink-500' : 'bg-slate-950/80 border-slate-850 opacity-50 grayscale'}`;
+
+                slotEl.innerHTML = `
+                    <div class="w-full h-44 rounded-lg overflow-hidden relative flex items-center justify-center bg-slate-950">
+                        ${isUnlocked 
+                            ? `<img src="${card.image || 'https://placehold.co/300x400/1e293b/ffffff?text='+encodeURIComponent(card.name)}" class="w-full h-full object-cover rounded-lg">`
+                            : `<div class="text-center p-2"><i class="fa-solid fa-lock text-3xl text-slate-600 mb-2"></i><div class="text-[10px] font-bold text-slate-500">???</div></div>`
+                        }
+                    </div>
+                    <div class="w-full mt-2 text-center">
+                        <div class="text-xs font-black truncate text-white">${isUnlocked ? card.name : 'Locked Card'}</div>
+                        <div class="flex justify-between items-center text-[10px] mt-1 text-slate-400 font-semibold">
+                            <span class="text-pink-400">${card.rarity}</span>
+                            <span class="bg-slate-800 px-1.5 py-0.5 rounded text-yellow-300">${isUnlocked ? `x${qty}` : '0'}</span>
+                        </div>
+                    </div>
+                `;
+
+                if (isUnlocked) {
+                    slotEl.addEventListener('click', () => {
+                        openInspector(card);
+                    });
+                }
+
+                binderGrid.appendChild(slotEl);
+            });
+        }
+
+        btnOpenBinder.addEventListener('click', () => {
+            renderBinder();
+            binderModal.classList.remove('hidden');
+        });
+
+        btnCloseBinder.addEventListener('click', () => {
+            binderModal.classList.add('hidden');
+        });
+
+        function openInspector(card) {
+            document.getElementById('inspector-card-name').innerText = card.name;
+            document.getElementById('inspector-card-rarity').innerText = `${card.rarity} Card`;
+
+            inspectorCardTarget.innerHTML = createCardHTML(card, true, 0);
+            const cardEl = inspectorCardTarget.querySelector('.tcg-card-item');
+            cardEl.classList.add('is-flipped');
+            cardEl.style.transform = 'rotateY(180deg)';
+
+            attachHoloTiltListeners(cardEl);
+
+            inspectorModal.classList.remove('hidden');
+        }
+
+        btnCloseInspector.addEventListener('click', () => {
+            inspectorModal.classList.add('hidden');
+        });
+
+
+        /* ==========================================================================
+           10. ODDS & AUDIO TOGGLES
+           ========================================================================== */
+        const oddsModal = document.getElementById('odds-modal');
+        document.getElementById('btn-show-odds').addEventListener('click', () => oddsModal.classList.remove('hidden'));
+        document.getElementById('btn-close-odds').addEventListener('click', () => oddsModal.classList.add('hidden'));
+
+        const audioBtn = document.getElementById('btn-audio-toggle');
+        const audioIcon = document.getElementById('audio-icon');
+
+        audioBtn.addEventListener('click', () => {
+            soundFX.enabled = !soundFX.enabled;
+            if (soundFX.enabled) {
+                audioIcon.className = 'fa-solid fa-volume-high text-sm text-pink-400';
+            } else {
+                audioIcon.className = 'fa-solid fa-volume-xmark text-sm text-slate-500';
+            }
+        });
+
+        // Initialize state on page load
+        loadState();
+    </script>
+</body>
+</html>
